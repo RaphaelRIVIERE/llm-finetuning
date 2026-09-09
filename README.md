@@ -6,3 +6,8 @@ POC d'un agent de triage médical pour le CHSA, basé sur Qwen3-1.7B, avec fine 
 
 - `notebooks/` : notebooks d'exploration
 - `scripts/` : logique réutilisable (extraction, traitement des données, entraînement)
+
+
+## Commande utilisé 
+
+uv add --dev ipykernel jupyterlab
