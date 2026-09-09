@@ -6,6 +6,12 @@ from pathlib import Path
 SAMPLES_DIR = Path(__file__).resolve().parent.parent / "data" / "samples"
 
 
+def first_split(dataset_dict):
+    """Renvoie le nom et le contenu du premier split d'un DatasetDict."""
+    name = list(dataset_dict.keys())[0]
+    return name, dataset_dict[name]
+
+
 def save_sample(dataset_dict, name, n_samples=20, samples_dir=SAMPLES_DIR):
     """Écrit un échantillon de chaque split d'un DatasetDict en JSON lisible."""
     for split, dataset in dataset_dict.items():
