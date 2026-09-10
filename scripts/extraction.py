@@ -132,6 +132,20 @@ def clean_sft_dataset(records):
     return nettoyes
 
 
+def clean_dpo_dataset(records):
+    """Retire les doublons exacts (prompt, chosen, rejected), garde la première occurrence.
+    Vérifié séparément que ces doublons ne traversent jamais deux splits différents."""
+    vus = set()
+    nettoyes = []
+    for record in records:
+        cle = (record["prompt"], record["chosen"], record["rejected"])
+        if cle in vus:
+            continue
+        vus.add(cle)
+        nettoyes.append(record)
+    return nettoyes
+
+
 def assign_splits(records, seed=42):
     """Répartit les records selon RATIOS_SPLITS, stratifié par source. Écrase le
     split déjà présent sur certaines sources (FrenchMedMCQA)."""
@@ -173,5 +187,7 @@ def build_sft_dataset():
 
 
 def build_dpo_dataset():
-    """Construit le dataset DPO à partir des paires préférentielles."""
-    return load_ultramedical_preference()
+    """Construit le dataset DPO : charge UltraMedical-Preference (fuite déjà
+    retirée) puis dédoublonne les triples exacts."""
+    records = load_ultramedical_preference()
+    return clean_dpo_dataset(records)
