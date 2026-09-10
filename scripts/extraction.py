@@ -1,11 +1,13 @@
 """Fonctions de chargement et conversion des sources vers le schéma commun."""
 
 from datasets import load_dataset
+from sklearn.model_selection import train_test_split
+
+RATIOS_SPLITS = {"train": 0.8, "validation": 0.1, "test": 0.05, "eval_clinique": 0.05}
 
 
 def load_mediqa():
-    """Charge MediQAl (config oeq). Split laissé à None : la séparation
-    train/validation/test/eval_clinique se fera plus tard sur l'agrégat."""
+    """Charge MediQAl (config oeq). Split laissé à None, assigné plus tard sur l'agrégat."""
     dataset = load_dataset("ANR-MALADES/MediQAl", "oeq")
     records = []
     for split in dataset.values():
@@ -36,8 +38,8 @@ LETTRES_FRENCHMEDMCQA = ["a", "b", "c", "d", "e"]
 
 
 def load_frenchmedmcqa():
-    """Charge FrenchMedMCQA et reformule le QCM en question/réponse.
-    `correct_answers` est déjà l'index (0 à 4) de la bonne proposition, pas un ClassLabel."""
+    """Charge FrenchMedMCQA et reformule le QCM en question/réponse. `correct_answers`
+    est l'index (0 à 4) de la bonne proposition, pas un ClassLabel."""
     dataset = load_dataset("nthngdy/frenchmedmcqa")
     records = []
     for split_name, split in dataset.items():
@@ -66,8 +68,7 @@ def load_frenchmedmcqa():
 
 
 def load_medquad():
-    """Charge MedQuAD. Split laissé à None comme pour MediQAl. Les 48 doublons
-    exacts ne sont pas retirés ici, le dédoublonnage se fera sur l'agrégat."""
+    """Charge MedQuAD. Split laissé à None, dédoublonnage fait plus tard sur l'agrégat."""
     dataset = load_dataset("keivalya/MedQuad-MedicalQnADataset")
     records = []
     compteur = 0
@@ -92,9 +93,8 @@ def load_medquad():
 
 
 def load_ultramedical_preference():
-    """Charge UltraMedical-Preference. Retire du train les prompt_id aussi présents
-    en validation (raison dans docs/decisions.md). chosen/rejected sont des
-    conversations à 2 tours, on ne garde que la réponse (dernier tour)."""
+    """Charge UltraMedical-Preference. Retire du train les prompt_id qui fuitent vers
+    validation. chosen/rejected : conversations à 2 tours, on garde la réponse finale."""
     dataset = load_dataset("TsinghuaC3I/UltraMedical-Preference")
     fuite = set(dataset["train"]["prompt_id"]) & set(dataset["validation"]["prompt_id"])
     records = []
@@ -120,8 +120,7 @@ def load_ultramedical_preference():
 
 
 def clean_sft_dataset(records):
-    """Retire les doublons exacts (instruction, reponse) de l'agrégat SFT,
-    en gardant la première occurrence rencontrée pour chaque paire."""
+    """Retire les doublons exacts (instruction, reponse), garde la première occurrence."""
     vus = set()
     nettoyes = []
     for record in records:
@@ -133,15 +132,44 @@ def clean_sft_dataset(records):
     return nettoyes
 
 
+def assign_splits(records, seed=42):
+    """Répartit les records selon RATIOS_SPLITS, stratifié par source. Écrase le
+    split déjà présent sur certaines sources (FrenchMedMCQA)."""
+    sources = [record["source"] for record in records]
+    train, reste = train_test_split(
+        records, test_size=1 - RATIOS_SPLITS["train"], stratify=sources, random_state=seed
+    )
+
+    part_validation = RATIOS_SPLITS["validation"] / (1 - RATIOS_SPLITS["train"])
+    sources_reste = [record["source"] for record in reste]
+    validation, reste = train_test_split(
+        reste, test_size=1 - part_validation, stratify=sources_reste, random_state=seed
+    )
+
+    sources_reste = [record["source"] for record in reste]
+    test, eval_clinique = train_test_split(
+        reste, test_size=0.5, stratify=sources_reste, random_state=seed
+    )
+
+    for nouveau_split, split_records in [
+        ("train", train), ("validation", validation), ("test", test), ("eval_clinique", eval_clinique)
+    ]:
+        for record in split_records:
+            if record["split"] is not None and record["split"] != nouveau_split:
+                record["transformations"].append("split_reassigne")
+            record["split"] = nouveau_split
+    return records
+
+
 def build_sft_dataset():
-    """Agrège les sources SFT (MediQA, FrenchMedMCQA, MedQuAD) au format commun,
-    puis retire les doublons exacts trouvés lors de l'exploration (voir
-    notebooks/01_exploration_sources.ipynb et notebooks/02_nettoyage_dedoublonnage.ipynb)."""
+    """Agrège MediQA, FrenchMedMCQA et MedQuAD au format commun, dédoublonne,
+    puis répartit en train/validation/test/eval_clinique."""
     records = []
     records += load_mediqa()
     records += load_frenchmedmcqa()
     records += load_medquad()
-    return clean_sft_dataset(records)
+    records = clean_sft_dataset(records)
+    return assign_splits(records)
 
 
 def build_dpo_dataset():

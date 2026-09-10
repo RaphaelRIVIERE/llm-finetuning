@@ -11,11 +11,15 @@ dependencies = [
     "presidio-analyzer>=2.2.364",
     "presidio-anonymizer>=2.2.364",
     "python-dotenv>=1.2.3",
+    "scikit-learn>=1.9.0",
 ]
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+package = false
 
 [dependency-groups]
 dev = [
