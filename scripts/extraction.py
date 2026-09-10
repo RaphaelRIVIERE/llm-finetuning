@@ -119,13 +119,29 @@ def load_ultramedical_preference():
     return records
 
 
+def clean_sft_dataset(records):
+    """Retire les doublons exacts (instruction, reponse) de l'agrégat SFT,
+    en gardant la première occurrence rencontrée pour chaque paire."""
+    vus = set()
+    nettoyes = []
+    for record in records:
+        cle = (record["instruction"], record["reponse"])
+        if cle in vus:
+            continue
+        vus.add(cle)
+        nettoyes.append(record)
+    return nettoyes
+
+
 def build_sft_dataset():
-    """Agrège les sources SFT (MediQA, FrenchMedMCQA, MedQuAD) au format commun."""
+    """Agrège les sources SFT (MediQA, FrenchMedMCQA, MedQuAD) au format commun,
+    puis retire les doublons exacts trouvés lors de l'exploration (voir
+    notebooks/01_exploration_sources.ipynb et notebooks/02_nettoyage_dedoublonnage.ipynb)."""
     records = []
     records += load_mediqa()
     records += load_frenchmedmcqa()
     records += load_medquad()
-    return records
+    return clean_sft_dataset(records)
 
 
 def build_dpo_dataset():
