@@ -1,9 +1,13 @@
 """Fonctions de chargement et conversion des sources vers le schéma commun."""
 
+import random
+from collections import defaultdict
+
 from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 
 RATIOS_SPLITS = {"train": 0.8, "validation": 0.1, "test": 0.05, "eval_clinique": 0.05}
+TAILLE_CIBLE_SFT = 5000
 
 
 def load_mediqa():
@@ -184,6 +188,31 @@ def build_sft_dataset():
     records += load_medquad()
     records = clean_sft_dataset(records)
     return assign_splits(records)
+
+
+def subsample_sft_dataset(records, taille_cible=TAILLE_CIBLE_SFT, seed=42):
+    """Sous-échantillonne l'agrégat SFT à environ `taille_cible` paires, en tirant
+    une fraction proportionnelle dans chaque (source, split). Choix documenté dans
+    `docs/decisions.md`."""
+    rng = random.Random(seed)
+    fraction = taille_cible / len(records)
+
+    par_stratum = defaultdict(list)
+    for record in records:
+        par_stratum[(record["source"], record["split"])].append(record)
+
+    echantillon = []
+    for stratum_records in par_stratum.values():
+        # suppose taille_cible << len(records) : sinon n peut dépasser la taille
+        # de la strate et rng.sample lève une erreur
+        n = round(len(stratum_records) * fraction)
+        echantillon += rng.sample(stratum_records, n)
+    return echantillon
+
+
+def build_sft_sample():
+    """Agrégat SFT complet, sous-échantillonné."""
+    return subsample_sft_dataset(build_sft_dataset())
 
 
 def build_dpo_dataset():
