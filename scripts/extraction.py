@@ -6,6 +6,8 @@ from collections import defaultdict
 from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 
+from scripts.anonymisation import anonymize_mediqal
+
 RATIOS_SPLITS = {"train": 0.8, "validation": 0.1, "test": 0.05, "eval_clinique": 0.05}
 TAILLE_CIBLE_SFT = 5000
 
@@ -181,12 +183,17 @@ def assign_splits(records, seed=42):
 
 def build_sft_dataset():
     """Agrège MediQA, FrenchMedMCQA et MedQuAD au format commun, dédoublonne,
-    puis répartit en train/validation/test/eval_clinique."""
+    anonymise MediQAl, puis répartit en train/validation/test/eval_clinique.
+    L'anonymisation (voir scripts/anonymisation.py) est faite après le
+    dédoublonnage, sur le texte original : deux cas cliniques distincts qui ne
+    diffèrent que par le nom du patient ne doivent pas devenir des doublons une
+    fois [PATIENT] substitué."""
     records = []
     records += load_mediqa()
     records += load_frenchmedmcqa()
     records += load_medquad()
     records = clean_sft_dataset(records)
+    records = anonymize_mediqal(records)
     return assign_splits(records)
 
 
