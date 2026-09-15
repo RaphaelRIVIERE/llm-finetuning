@@ -6,7 +6,7 @@ from collections import defaultdict
 from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 
-from scripts.anonymisation import anonymize_mediqal
+from scripts.anonymisation import anonymize_mediqal, anonymize_ultramedical_preference
 
 RATIOS_SPLITS = {"train": 0.8, "validation": 0.1, "test": 0.05, "eval_clinique": 0.05}
 TAILLE_CIBLE_SFT = 5000
@@ -224,6 +224,8 @@ def build_sft_sample():
 
 def build_dpo_dataset():
     """Construit le dataset DPO : charge UltraMedical-Preference (fuite déjà
-    retirée) puis dédoublonne les triples exacts."""
+    retirée), dédoublonne les triples exacts, puis anonymise les quelques
+    emails et numéros de téléphone personnels présents dans le corpus."""
     records = load_ultramedical_preference()
-    return clean_dpo_dataset(records)
+    records = clean_dpo_dataset(records)
+    return anonymize_ultramedical_preference(records)
