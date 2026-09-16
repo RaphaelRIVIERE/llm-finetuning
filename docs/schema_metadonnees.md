@@ -17,6 +17,30 @@ confiance on lui accorde, et quelles transformations lui ont été appliquées.
 | `niveau_confiance`  | string | `haut`, `moyen`, `bas`, selon la fiabilité de l'annotation d'origine |
 | `transformations`   | liste  | Historique des étapes appliquées à l'exemple (reformulation, anonymisation, etc.) |
 
+## Calcul du niveau_confiance
+
+Le critère repose sur deux éléments : la clarté de la licence de la source, et la
+façon dont son contenu a été validé.
+
+- **haut** : contenu d'origine humaine, validé sur un cas réel (cas clinique
+  rédigé ou question d'examen avec correction), licence claire.
+  - `mediqal` : cas cliniques rédigés par des professionnels, corpus de
+    recherche validé (Bazoge et al., Scientific Data), licence CC-BY-4.0.
+  - `frenchmedmcqa` : questions réelles de l'examen du diplôme de
+    spécialisation en pharmacie, avec correction manuelle indiquée par les
+    auteurs du papier, licence Apache 2.0 (voir `docs/sources.md`).
+- **moyen** : contenu issu d'une source fiable, mais assemblé ou annoté de
+  façon largement automatique, sans validation clinique propre à chaque
+  exemple.
+  - `medquad` : FAQ agrégées automatiquement depuis des sites d'organismes de
+    santé publics (NIH), fiables sur le fond mais pas relues une à une pour
+    ce projet.
+  - `ultramedical_preference` : préférences annotées par GPT-4 puis révisées
+    par des experts biomédicaux, mais sans vérification systématique exemple
+    par exemple.
+- **bas** : réservé aux sources sans licence claire ou sans validation
+  identifiée. Aucune source du projet ne s'y trouve actuellement.
+
 ## Champs spécifiques au SFT
 
 | Champ               | Type   | Description |
@@ -70,4 +94,3 @@ classDiagram
   beaucoup d'exemples (MedQuAD et FrenchMedMCQA n'ont pas ce niveau de détail
   clinique). À décider : les laisser vides ou ne les extraire que quand la source
   le permet (MediQAl, qui a des cas cliniques rédigés).
-- Le calcul du `niveau_confiance` reste à définir précisément par source.
