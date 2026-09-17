@@ -31,4 +31,6 @@ dev = [
     "en-core-web-md",
     "ipykernel>=7.3.0",
     "jupyterlab>=4.6.3",
+    "matplotlib>=3.11.2",
+    "seaborn>=0.13.2",
 ]
