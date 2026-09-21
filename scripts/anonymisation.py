@@ -9,6 +9,8 @@ PERSON peut passer à travers les deux passes MediQAl.
 
 import re
 
+from tqdm import tqdm
+
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
@@ -52,7 +54,7 @@ def anonymize_mediqal(records):
     'anonymisation_presidio' à `transformations` sur les records touchés."""
     analyzer = build_analyzer("fr")
     anonymizer = AnonymizerEngine()
-    for record in records:
+    for record in tqdm(records, desc="anonymisation mediqal"):
         if record["source"] != "mediqal":
             continue
         instruction, touche_i = anonymize_text(record["instruction"], analyzer, anonymizer)
@@ -87,7 +89,7 @@ def anonymize_ultramedical_preference(records):
     `transformations` sur les records touchés."""
     analyzer = build_analyzer("en")
     anonymizer = AnonymizerEngine()
-    for record in records:
+    for record in tqdm(records, desc="anonymisation ultramedical_preference"):
         if record["source"] != "ultramedical_preference":
             continue
         touche = False
