@@ -199,8 +199,8 @@ def build_sft_dataset():
 
 def subsample_sft_dataset(records, taille_cible=TAILLE_CIBLE_SFT, seed=42):
     """Sous-échantillonne l'agrégat SFT à environ `taille_cible` paires, en tirant
-    une fraction proportionnelle dans chaque (source, split). Choix documenté dans
-    `docs/decisions.md`."""
+    une fraction proportionnelle dans chaque (source, split), pour garder les
+    proportions naturelles des sources et des splits."""
     rng = random.Random(seed)
     fraction = taille_cible / len(records)
 

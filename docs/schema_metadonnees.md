@@ -93,8 +93,7 @@ classDiagram
 Les champs `symptomes`, `antecedents` et `constantes_vitales` restent vides pour
 FrenchMedMCQA et MedQuAD : ces sources n'ont pas le niveau de détail clinique
 nécessaire pour les remplir. Question posée au mentor le 11 septembre 2026 mais
-restée sans réponse tranchée (voir `docs/point_mentor_2026-09-11.md`), donc
-choix retenu par défaut : c'est l'option la plus simple et elle ne perd aucune
-information puisque ces sources ne permettaient de toute façon pas une
-extraction fiable. Une extraction automatique pour MedQuAD reste envisageable
-en amélioration potentielle (voir `docs/ameliorations_potentielles.md`).
+restée sans réponse tranchée, donc choix retenu par défaut : c'est l'option la
+plus simple et elle ne perd aucune information puisque ces sources ne
+permettaient de toute façon pas une extraction fiable. Une extraction
+automatique pour MedQuAD reste envisageable comme amélioration future.
