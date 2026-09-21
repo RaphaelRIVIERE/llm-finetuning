@@ -9,10 +9,14 @@ __pycache__/
 
 checkpoints/
 outputs/
+runs/
 *.safetensors
 *.bin
 *.pt
 *.ckpt
+
+mlflow.db
+mlartifacts/
 
 *.log
 
