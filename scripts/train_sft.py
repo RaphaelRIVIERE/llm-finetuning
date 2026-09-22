@@ -107,9 +107,13 @@ if __name__ == "__main__":
         "--pilote", action="store_true",
         help="Run pilote sur un petit sous ensemble, pour valider que la pipeline tourne.",
     )
+    parser.add_argument("--epochs", type=float, help="Nombre d'epochs, remplace la valeur de la config.")
+    parser.add_argument("--nom-run", help="Nom du run, utilisé pour le dossier de sortie et MLflow.")
     args_cli = parser.parse_args()
 
     hp = Hyperparametres()
+    if args_cli.epochs is not None:
+        hp.epochs = args_cli.epochs
 
     if args_cli.pilote:
         hp.epochs = 1.0
@@ -120,5 +124,8 @@ if __name__ == "__main__":
         train_dataset = charger_dataset("train")
         eval_dataset = charger_dataset("validation")
         nom_run = "complet"
+
+    if args_cli.nom_run is not None:
+        nom_run = args_cli.nom_run
 
     entrainer(hp, nom_run, train_dataset, eval_dataset)

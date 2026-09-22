@@ -51,6 +51,41 @@ concret de contrôle de sur apprentissage (le brief de mission insiste sur ce
 point). Si une prochaine itération repart de zéro, envisager de réduire à 2
 epochs plutôt que 3, ou d'ajouter un `early stopping` sur `eval_loss`.
 
+## Run epochs2 : confirmation du choix de checkpoint-500, pas de changement
+
+**Statut** : résolu, 2026-09-22.
+
+**Le problème** : après avoir observé le sur apprentissage à partir du step
+500 sur le run `complet` (voir plus bas), test ciblé pour vérifier
+l'hypothèse : relancer un run dédié à 2 epochs (`--epochs 2 --nom-run
+epochs2`, mêmes hyperparamètres et seed sinon) pour voir si un entraînement
+prévu pour s'arrêter à 500 steps fait mieux que `checkpoint-500` extrait
+d'un run prévu pour 750 steps.
+
+**Ce qu'on a trouvé** : les deux courbes `eval_loss` sont quasiment
+superposées step par step (ex. step 250 : 1,3022 vs 1,3042), ce qui confirme
+la reproductibilité du pipeline. Au step 500, `checkpoint-500` du run
+`complet` reste légèrement meilleur (1,2875) que la fin du run `epochs2`
+(1,2930). Explication probable : le learning rate suit un schedule qui
+décroît jusqu'à la fin prévue de l'entraînement. Dans `epochs2` (prévu pour
+500 steps), le LR est déjà à zéro au step 500. Dans `complet` (prévu pour
+750 steps), il reste encore un peu de marge à ce stade, d'où le léger
+avantage.
+
+**Décision** : garder `checkpoint-500` du run `complet` comme référence pour
+le DPO, sans changement. Ce test confirme le choix plutôt qu'il ne le remet
+en cause.
+
+**Pourquoi ce choix** : la différence entre les deux (0,0055 en eval_loss)
+est négligeable, et `checkpoint-500` du run `complet` est déjà légèrement
+meilleur, pas de raison de changer.
+
+**Ce qu'on garde de cette expérience** : un exemple concret de démarche
+méthodique pour le rapport (observation du sur apprentissage, hypothèse,
+test ciblé, confirmation), et une vérification indépendante de la
+reproductibilité du pipeline (seed fixé, résultats cohérents d'un run à
+l'autre).
+
 ## Génération SFT en boucle : problème de décodage, pas du modèle
 
 **Statut** : résolu, 2026-09-21.
