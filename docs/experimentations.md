@@ -1,5 +1,33 @@
 # Journal d'expérimentations
 
+## Checkpoint DPO retenu : checkpoint-250, pas le checkpoint final
+
+**Statut** : résolu, 2026-09-22.
+
+**Le problème** : run complet DPO (`scripts/train_dpo.py`, 313 steps, 1 epoch
+sur 5000 paires sous échantillonnées, à partir de `checkpoint-500` du SFT
+fusionné) terminé sans erreur. `eval_loss` baisse jusqu'au step 250 (0,3830,
+minimum), puis remonte légèrement (0,4008 au step 300, 0,4031 au step final
+313). Même schéma de léger sur apprentissage en toute fin d'entraînement que
+pour le SFT.
+
+**Ce qu'on observe côté métriques DPO** : `rewards/accuracies` (fréquence à
+laquelle le modèle préfère la réponse chosen) passe de 69% en début
+d'entraînement à un plateau autour de 76 à 82% dans la seconde moitié.
+`rewards/margins` (écart de score entre chosen et rejected) grimpe de 0,5 à
+un plateau autour de 1,4 à 1,9. Le modèle apprend bien à séparer les deux
+réponses dans le bon sens.
+
+**Décision** : garder `checkpoint-250` (meilleure eval_loss) comme modèle
+DPO de référence, pas `checkpoint_final` (step 313), même raisonnement que
+pour `checkpoint-500` du SFT.
+
+**Comment vérifier plus tard** : évaluer `checkpoint-250` sur `eval_clinique`
+et comparer aux générations `checkpoint-500` (avant DPO) déjà documentées
+dans `docs/evaluation_sft.md`, en particulier sur les faux négatifs et
+l'hallucination de médicament déjà repérés.
+
+
 Documentation des runs d'entraînement et d'évaluation : ce qui a été lancé, avec
 quels résultats, et ce qu'on en tire. C'est la matière brute pour la méthodologie
 et les résultats du rapport final.
