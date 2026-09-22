@@ -114,6 +114,58 @@ test ciblé, confirmation), et une vérification indépendante de la
 reproductibilité du pipeline (seed fixé, résultats cohérents d'un run à
 l'autre).
 
+## Comparaison avant / après DPO sur eval_clinique : pas d'amélioration claire
+
+**Statut** : observé, 2026-09-22, à traiter comme limite documentée du POC.
+
+**Le problème** : `scripts/evaluate_dpo.py` génère les mêmes 5 exemples
+français (déjà dans `docs/evaluation_sft.md`) et 5 exemples anglais, avec
+`checkpoint-500` (SFT seul) et `checkpoint-250` (SFT + DPO), mêmes
+paramètres de décodage. Rapport dans `docs/evaluation_dpo.md`.
+
+**Ce qu'on trouve** :
+
+- Le faux négatif le plus critique (cas de syndrome de Cushing, exemple 4)
+  n'est pas corrigé : réponse identique avant et après, "Diabète insipide",
+  toujours faux.
+- Un signe de dégradation du français malgré `beta=0.3` : sur l'exemple 1,
+  la réponse après DPO part en français puis bascule en plein milieu sur du
+  texte anglais, alors que rien dans la question ne le justifie.
+- Pas d'amélioration claire de la justesse ailleurs, et des hallucinations
+  nouvelles ou plus marquées après DPO : un volume de lait maternel de
+  "cinq litres" par jour inventé (exemple 3), un terme médical inventé
+  ("syndrome diabétique butyrique", exemple 5), une statistique de
+  prévalence non vérifiable ("1 sur un million", exemple 8). Deux réponses
+  anglaises (exemples 7 et 10) dégénèrent en texte tronqué et peu lisible en
+  fin de génération après DPO, alors que ce n'était pas le cas avant.
+
+**Hypothèse probable** : les métriques d'entraînement (`rewards/accuracies`
+en hausse, `eval_loss` en baisse, voir plus haut) montrent que le modèle
+apprend à distinguer chosen de rejected sur le dataset d'entraînement, mais
+UltraMedical-Preference tend à préférer des réponses plus longues et
+détaillées, pas nécessairement plus justes cliniquement. Le modèle semble
+avoir en partie appris à être plus disert, pas plus exact ou plus sûr. Mode
+d'échec connu du DPO/RLHF (optimiser la forme préférée par les annotateurs
+plutôt que le fond).
+
+**Remarque technique en passant** : le texte "avant DPO" généré par ce
+script diffère légèrement de celui déjà documenté dans
+`docs/evaluation_sft.md` pour les mêmes exemples et les mêmes paramètres de
+génération (`do_sample=False`). Léger défaut de déterminisme du décodage
+greedy sur GPU avec certains noyaux d'attention (comportement connu, pas
+propre à ce projet). Les deux versions restent comparables qualitativement
+(mêmes types d'erreurs), mais ce n'est pas une reproductibilité bit à bit.
+
+**Ce qu'il faut faire avec ça** : documenter honnêtement dans le rapport
+final comme limite du POC, avec ces exemples concrets plutôt que de
+présenter seulement les métriques d'entraînement qui, prises seules,
+suggéraient une amélioration. Ne pas relancer un DPO différent sans
+hypothèse plus solide sur ce qui manque (plus de données ne corrige pas
+forcément un problème de justesse factuelle sur un modèle de 1,7 milliard
+de paramètres). Garder pour la roadmap de passage à l'échelle : DPO sur un
+modèle plus grand, paires de préférence construites spécifiquement pour la
+justesse clinique plutôt que reprises telles quelles d'un dataset généraliste.
+
 ## Génération SFT en boucle : problème de décodage, pas du modèle
 
 **Statut** : résolu, 2026-09-21.
