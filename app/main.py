@@ -14,8 +14,8 @@ from app.models import Interaction, Log
 from app.schemas import ReponseTriage, RequeteTriage
 
 CHEMIN_MODELE = os.environ.get("CHEMIN_MODELE", "runs/final")
-MAX_NOUVEAUX_TOKENS = 256
-REPETITION_PENALTY = 1.3
+MAX_NOUVEAUX_TOKENS = 512
+FREQUENCY_PENALTY = 0.5
 # Défaut vLLM (~0.9) trop haut sur un GPU 8 Go partagé avec le reste du système (WSL).
 GPU_MEMORY_UTILIZATION = float(os.environ.get("GPU_MEMORY_UTILIZATION", "0.8"))
 # Défaut du modèle (32768) réserve plus de cache KV que ce qu'il reste de VRAM après
@@ -74,12 +74,13 @@ async def sante():
 
 @app.post("/triage", response_model=ReponseTriage)
 async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
-    # repetition_penalty seul, vLLM n'a pas d'équivalent à no_repeat_ngram_size utilisé
-    # pendant l'évaluation Transformers (voir docs/experimentations.md), à revalider.
+    # frequency_penalty remplace le couple repetition_penalty + no_repeat_ngram_size de
+    # l'évaluation Transformers, choix testé dans scripts/test_decodage.py
+    # (voir docs/experimentations.md).
     params = SamplingParams(
         max_tokens=MAX_NOUVEAUX_TOKENS,
         temperature=0.0,
-        repetition_penalty=REPETITION_PENALTY,
+        frequency_penalty=FREQUENCY_PENALTY,
     )
     id_requete = random_uuid()
 

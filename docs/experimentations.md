@@ -16,6 +16,8 @@ et les résultats du rapport final.
 | [Checkpoint DPO retenu : checkpoint-250, pas le checkpoint final](#checkpoint-dpo-retenu--checkpoint-250-pas-le-checkpoint-final) | Résolu, 2026-09-22 | checkpoint-250 gardé comme référence DPO, même logique que pour le SFT. |
 | [Comparaison avant / après DPO sur eval_clinique : pas d'amélioration claire](#comparaison-avant--après-dpo-sur-eval_clinique--pas-damélioration-claire) | Observé, 2026-09-22, limite documentée du POC | Pas d'amélioration nette, régressions repérées (code switching, hallucinations). |
 | [Modèle retenu pour la démo : SFT + DPO malgré l'absence d'amélioration claire](#modèle-retenu-pour-la-démo--sft--dpo-malgré-labsence-damélioration-claire) | Résolu, 2026-09-22 | SFT + DPO (checkpoint-250) gardé pour la démo, malgré l'absence de gain net. |
+| [Décodage vLLM : frequency_penalty à la place de repetition_penalty](#décodage-vllm--frequency_penalty-à-la-place-de-repetition_penalty) | Résolu, 2026-09-23 | frequency_penalty=0.5 et max_tokens=512 retenus pour l'API. |
+| [Questions libres : forte sensibilité à la formulation](#questions-libres--forte-sensibilité-à-la-formulation) | Observé, 2026-09-23, limite documentée du POC | Réponses incohérentes entre deux formulations d'un même cas sur 4 cas sur 5, le décodage n'y change rien. |
 
 ## Entraînement en local, suivi avec MLflow
 
@@ -90,6 +92,10 @@ si le comportement diffère avec vLLM (moteur de génération différent de
 **Comment vérifier plus tard** : reconfirmer que vLLM, au moment du
 déploiement, applique une pénalité de répétition équivalente par défaut ou
 via sa config.
+
+**Suite, 2026-09-23** : vLLM n'a pas d'équivalent à `no_repeat_ngram_size`, et
+`repetition_penalty=1.3` seul abîme le texte. Remplacé par
+`frequency_penalty=0.5` dans l'API, voir la section « Décodage vLLM » plus bas.
 
 ## Qualité de fond du modèle SFT (avant DPO) : faux négatifs et hallucination
 
@@ -212,7 +218,12 @@ paramètres de décodage. Rapport dans `docs/evaluation_dpo.md`.
   ("syndrome diabétique butyrique", exemple 5), une statistique de
   prévalence non vérifiable ("1 sur un million", exemple 8). Deux réponses
   anglaises (exemples 7 et 10) dégénèrent en texte tronqué et peu lisible en
-  fin de génération après DPO, alors que ce n'était pas le cas avant.
+  fin de génération après DPO. Nuance ajoutée le 2026-09-23 : le même
+  phénomène (mots collés sans espace) apparaît déjà avant DPO sur ces deux
+  mêmes exemples, et les tests de décodage vLLM montrent qu'il vient surtout de
+  `repetition_penalty=1.3`. Il disparaît avec `frequency_penalty=0.5` (voir
+  la section « Décodage vLLM »). Ce point n'est donc pas à mettre sur le
+  compte du DPO seul.
 
 **Hypothèse probable** : les métriques d'entraînement (`rewards/accuracies`
 en hausse, `eval_loss` en baisse, voir plus haut) montrent que le modèle
@@ -264,3 +275,138 @@ en soi.
 comme axe d'amélioration pour la roadmap de passage à l'échelle (paires de
 préférence construites spécifiquement pour la justesse clinique, modèle
 plus grand), plutôt que de retenter un DPO similaire sur ce POC.
+
+## Décodage vLLM : frequency_penalty à la place de repetition_penalty
+
+**Statut** : résolu, 2026-09-23.
+
+**Le problème** : l'API reprenait `repetition_penalty=1.3` des évaluations
+Transformers, mais pas `no_repeat_ngram_size=3`, qui n'existe pas dans
+`SamplingParams` de vLLM. Les premiers tests manuels de l'API donnaient des
+réponses très courtes, avec des termes inventés et des mélanges de langue.
+
+**Ce qu'on a testé** : `scripts/test_decodage.py` génère les 10 exemples de
+`evaluate_dpo.py` (5 FR, 5 EN) avec le modèle final, en greedy, sous
+plusieurs réglages. Le rapport note aussi le nombre de tokens et la raison
+de l'arrêt (`stop` ou `length`).
+
+- Passage 1 (`docs/test_decodage_vllm.md`, max_tokens=256) :
+  `repetition_penalty` à 1.3, 1.1 et 1.0, `frequency_penalty=0.5`, et un
+  mélange `repetition_penalty=1.1` + `presence_penalty=0.3`.
+- Passage 2 (`docs/test_decodage_vllm_2.md`, max_tokens=512) :
+  `frequency_penalty` à 0.3, 0.5 et 0.7.
+
+**Ce qu'on a trouvé** :
+
+- `repetition_penalty=1.3` abîme le texte : mots collés sans espace sur les
+  réponses anglaises longues (exemples 7 et 10), mots déformés en français
+  (« allattement », « Hypoglicidmie »). Une pénalité aussi forte finit par
+  pénaliser les espaces et les mots courants.
+- Sans pénalité, le bouclage du SFT revient sur 3 exemples français sur 5.
+- `repetition_penalty=1.1`, avec ou sans `presence_penalty`, est plus
+  lisible mais invente encore des termes (« ventriculonévrose »,
+  « hydropnée »).
+- `frequency_penalty=0.3` laisse encore une boucle sur l'exemple 1. À 0.7,
+  le modèle évite les mots utiles à répéter (« infarctus » devient
+  « myopatie ») et invente davantage.
+- `frequency_penalty=0.5` donne les réponses les plus propres, sans boucle,
+  et les mêmes sorties d'un passage à l'autre.
+- Les réponses courtes ne sont pas coupées : presque toutes s'arrêtent sur
+  `stop`, c'est le modèle qui s'arrête de lui même, en ligne avec les
+  réponses courtes de MediQAl. Seul l'exemple 10 atteignait 256 tokens, il
+  se termine seul à 350 tokens avec la limite à 512.
+- Le cas de Cushing (« Diabète insipide ») et l'exemple 8 donnent la même
+  réponse sous tous les réglages : ces erreurs viennent du modèle, pas du
+  décodage.
+
+**Décision** : `frequency_penalty=0.5`, sans `repetition_penalty`, et
+`max_tokens=512` dans `app/main.py`.
+
+**Ce qu'on perd avec ce choix** : l'API ne décode plus exactement comme les
+évaluations Transformers (`docs/evaluation_sft.md`, `docs/evaluation_dpo.md`),
+qui gardent `repetition_penalty=1.3` et `no_repeat_ngram_size=3`. Les
+réponses de l'API ne sont donc pas comparables mot pour mot avec ces
+rapports. Le réglage ne corrige pas non plus le fond : les erreurs de
+diagnostic et certaines hallucinations restent (exemple 6 : hyperuricémie
+et orotate inventés).
+
+**Comment vérifier plus tard** : 10 exemples, c'est peu. Refaire un contrôle
+sur un plus grand échantillon d'`eval_clinique` au moment de l'évaluation
+clinique finale, avec ces paramètres.
+
+## Questions libres : forte sensibilité à la formulation
+
+**Statut** : observé, 2026-09-23, limite documentée du POC.
+
+**Le problème** : premiers appels manuels à l'API avec le nouveau décodage
+(`frequency_penalty=0.5`), sur une question libre, pas au format « Cas
+clinique / Question » de l'entraînement. Deux formulations qui ne diffèrent
+que par le début de la phrase :
+
+- « J'ai 35 ans avec des douleur en bas du dos, douleur a l'épaule et au
+  genoux. Quel diagnostic peut être envisagé au vu des signes cliniques et
+  biologiques ? » Réponse : « Syndrome de la lombalgie cervicale » répété 5
+  fois. La boucle revient malgré `frequency_penalty`, et le terme n'a pas de
+  sens (lombalgie pour le bas du dos, cervical pour le cou).
+- « Homme de 35 ans avec des douleur en bas du dos, douleur a l'épaule et au
+  genoux. [même question] » Réponse : « Syndrome de l'os intervertébral »,
+  puis « Syndrome de l'os intervertebral avec syndrome de la rotule », puis
+  « ... avec syndrome de la fémur ». Plus de boucle franche, mais des
+  diagnostics inventés, et une répétition seulement masquée (le mot perd son
+  accent pour échapper à la pénalité).
+
+**Ce qu'on en tire** :
+
+- Le modèle est très sensible à la formulation. La tournure à la troisième
+  personne, plus proche des cas cliniques de MediQAl, suffit à changer la
+  forme de la réponse. Or un agent de triage recevra surtout des messages
+  libres, écrits comme le premier.
+- Le décodage règle la forme, pas le fond. Dans les deux cas, la piste
+  classique pour un homme jeune avec des douleurs du bas du dos et de
+  plusieurs articulations (spondylarthrite) n'apparaît pas. Même famille
+  d'erreur que le cas de Cushing.
+- `frequency_penalty=0.5` ne suffit pas toujours à empêcher la répétition
+  quand le modèle est très sûr de lui.
+
+**Ce qu'on fait** : passage 3 de `scripts/test_decodage.py`
+(`docs/test_decodage_vllm_3.md`). 5 cas posés chacun sous deux formes
+(première personne comme un patient, troisième personne comme un cas
+clinique) : le cas ci dessus, une douleur thoracique évocatrice d'infarctus,
+une céphalée brutale évocatrice d'hémorragie méningée, une méningite (en
+anglais), et un rhume banal comme témoin de sur estimation de la gravité.
+Trois réglages comparés : `frequency_penalty=0.5` seul, plus
+`repetition_penalty=1.1`, ou plus `presence_penalty=0.5`. Pas de réponse
+attendue : on juge la forme et la cohérence, pas la justesse médicale, qui
+demande une référence validée par un clinicien.
+
+**Ce qu'on a trouvé** :
+
+- Plus aucune boucle, sous les trois réglages.
+- Le réglage compte peu. En formulation cas clinique, les trois donnent
+  exactement la même réponse (un seul mot). `repetition_penalty=1.1` ajoute
+  de la dérive (« syndrome d'entropion » pour des douleurs articulaires,
+  « crise cardiaque » pour un mal de tête). `presence_penalty=0.5` donne
+  presque toujours la même chose que `frequency_penalty=0.5` seul. On garde
+  donc `frequency_penalty=0.5` seul dans l'API.
+- Les deux formulations d'un même cas donnent des réponses différentes sur
+  4 cas sur 5. Douleur thoracique : « crise aiguë de myocardique » côté
+  patient, « Pneumothorax » côté cas clinique. Céphalée brutale : « mal de
+  crâne » contre « Trombophlébite aortique ». Rhume : « infection
+  respiratoire aiguë » contre « Gingivostomatite ». Seule la méningite, en
+  anglais, est cohérente entre les deux formes. Quand deux réponses se
+  contredisent, au moins l'une des deux est fausse, sans avoir besoin d'un
+  avis médical pour le dire.
+- Mots déformés ou inventés : « myocardique » employé comme un nom,
+  « Trombophlébite », « Syndrome de l'os intervertébral ».
+- Non déterminisme : la question « J'ai 35 ans... » envoyée seule à l'API
+  donnait « lombalgie cervicale » répété 5 fois, la même question générée en
+  lot de 10 par le script donne une liste différente, avec le même réglage.
+  Explication probable : les calculs GPU changent légèrement selon la
+  composition du lot, et le greedy peut prendre une autre route. En
+  production, une même question peut donc donner deux réponses différentes
+  selon la charge du serveur.
+
+**Comment vérifier plus tard** : à garder quoi qu'il arrive pour la section
+limites du rapport, avec les deux formulations côte à côte. Piste pour la
+roadmap : ajouter au dataset SFT des questions formulées comme un patient,
+pas seulement des cas d'examen.
