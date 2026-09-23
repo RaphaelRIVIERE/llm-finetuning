@@ -1,36 +1,21 @@
 # Journal d'expérimentations
 
-## Checkpoint DPO retenu : checkpoint-250, pas le checkpoint final
-
-**Statut** : résolu, 2026-09-22.
-
-**Le problème** : run complet DPO (`scripts/train_dpo.py`, 313 steps, 1 epoch
-sur 5000 paires sous échantillonnées, à partir de `checkpoint-500` du SFT
-fusionné) terminé sans erreur. `eval_loss` baisse jusqu'au step 250 (0,3830,
-minimum), puis remonte légèrement (0,4008 au step 300, 0,4031 au step final
-313). Même schéma de léger sur apprentissage en toute fin d'entraînement que
-pour le SFT.
-
-**Ce qu'on observe côté métriques DPO** : `rewards/accuracies` (fréquence à
-laquelle le modèle préfère la réponse chosen) passe de 69% en début
-d'entraînement à un plateau autour de 76 à 82% dans la seconde moitié.
-`rewards/margins` (écart de score entre chosen et rejected) grimpe de 0,5 à
-un plateau autour de 1,4 à 1,9. Le modèle apprend bien à séparer les deux
-réponses dans le bon sens.
-
-**Décision** : garder `checkpoint-250` (meilleure eval_loss) comme modèle
-DPO de référence, pas `checkpoint_final` (step 313), même raisonnement que
-pour `checkpoint-500` du SFT.
-
-**Comment vérifier plus tard** : évaluer `checkpoint-250` sur `eval_clinique`
-et comparer aux générations `checkpoint-500` (avant DPO) déjà documentées
-dans `docs/evaluation_sft.md`, en particulier sur les faux négatifs et
-l'hallucination de médicament déjà repérés.
-
-
 Documentation des runs d'entraînement et d'évaluation : ce qui a été lancé, avec
 quels résultats, et ce qu'on en tire. C'est la matière brute pour la méthodologie
 et les résultats du rapport final.
+
+## Sommaire
+
+| Section | Statut | Décision en bref |
+|---|---|---|
+| [Entraînement en local, suivi avec MLflow](#entraînement-en-local-suivi-avec-mlflow) | Résolu, 2026-09-21 | GPU local (RTX 5060, 8 Go) et suivi MLflow local, pas de cloud. |
+| [Checkpoint SFT retenu : checkpoint-500, pas le checkpoint final](#checkpoint-sft-retenu--checkpoint-500-pas-le-checkpoint-final) | Résolu, 2026-09-21 | checkpoint-500 gardé comme référence, meilleure eval_loss avant sur apprentissage. |
+| [Génération SFT en boucle : problème de décodage, pas du modèle](#génération-sft-en-boucle--problème-de-décodage-pas-du-modèle) | Résolu, 2026-09-21 | repetition_penalty=1.3 et no_repeat_ngram_size=3 règlent le bouclage. |
+| [Qualité de fond du modèle SFT (avant DPO) : faux négatifs et hallucination](#qualité-de-fond-du-modèle-sft-avant-dpo--faux-négatifs-et-hallucination) | Observé, 2026-09-21, à suivre | Faux négatifs et hallucinations relevés, gardés comme référence avant DPO. |
+| [Run epochs2 : confirmation du choix de checkpoint-500, pas de changement](#run-epochs2--confirmation-du-choix-de-checkpoint-500-pas-de-changement) | Résolu, 2026-09-22 | Run dédié à 2 epochs confirme checkpoint-500 du run complet. |
+| [Checkpoint DPO retenu : checkpoint-250, pas le checkpoint final](#checkpoint-dpo-retenu--checkpoint-250-pas-le-checkpoint-final) | Résolu, 2026-09-22 | checkpoint-250 gardé comme référence DPO, même logique que pour le SFT. |
+| [Comparaison avant / après DPO sur eval_clinique : pas d'amélioration claire](#comparaison-avant--après-dpo-sur-eval_clinique--pas-damélioration-claire) | Observé, 2026-09-22, limite documentée du POC | Pas d'amélioration nette, régressions repérées (code switching, hallucinations). |
+| [Modèle retenu pour la démo : SFT + DPO malgré l'absence d'amélioration claire](#modèle-retenu-pour-la-démo--sft--dpo-malgré-labsence-damélioration-claire) | Résolu, 2026-09-22 | SFT + DPO (checkpoint-250) gardé pour la démo, malgré l'absence de gain net. |
 
 ## Entraînement en local, suivi avec MLflow
 
@@ -78,93 +63,6 @@ checkpoints ne coûte que de l'espace disque, déjà fait par défaut
 concret de contrôle de sur apprentissage (le brief de mission insiste sur ce
 point). Si une prochaine itération repart de zéro, envisager de réduire à 2
 epochs plutôt que 3, ou d'ajouter un `early stopping` sur `eval_loss`.
-
-## Run epochs2 : confirmation du choix de checkpoint-500, pas de changement
-
-**Statut** : résolu, 2026-09-22.
-
-**Le problème** : après avoir observé le sur apprentissage à partir du step
-500 sur le run `complet` (voir plus bas), test ciblé pour vérifier
-l'hypothèse : relancer un run dédié à 2 epochs (`--epochs 2 --nom-run
-epochs2`, mêmes hyperparamètres et seed sinon) pour voir si un entraînement
-prévu pour s'arrêter à 500 steps fait mieux que `checkpoint-500` extrait
-d'un run prévu pour 750 steps.
-
-**Ce qu'on a trouvé** : les deux courbes `eval_loss` sont quasiment
-superposées step par step (ex. step 250 : 1,3022 vs 1,3042), ce qui confirme
-la reproductibilité du pipeline. Au step 500, `checkpoint-500` du run
-`complet` reste légèrement meilleur (1,2875) que la fin du run `epochs2`
-(1,2930). Explication probable : le learning rate suit un schedule qui
-décroît jusqu'à la fin prévue de l'entraînement. Dans `epochs2` (prévu pour
-500 steps), le LR est déjà à zéro au step 500. Dans `complet` (prévu pour
-750 steps), il reste encore un peu de marge à ce stade, d'où le léger
-avantage.
-
-**Décision** : garder `checkpoint-500` du run `complet` comme référence pour
-le DPO, sans changement. Ce test confirme le choix plutôt qu'il ne le remet
-en cause.
-
-**Pourquoi ce choix** : la différence entre les deux (0,0055 en eval_loss)
-est négligeable, et `checkpoint-500` du run `complet` est déjà légèrement
-meilleur, pas de raison de changer.
-
-**Ce qu'on garde de cette expérience** : un exemple concret de démarche
-méthodique pour le rapport (observation du sur apprentissage, hypothèse,
-test ciblé, confirmation), et une vérification indépendante de la
-reproductibilité du pipeline (seed fixé, résultats cohérents d'un run à
-l'autre).
-
-## Comparaison avant / après DPO sur eval_clinique : pas d'amélioration claire
-
-**Statut** : observé, 2026-09-22, à traiter comme limite documentée du POC.
-
-**Le problème** : `scripts/evaluate_dpo.py` génère les mêmes 5 exemples
-français (déjà dans `docs/evaluation_sft.md`) et 5 exemples anglais, avec
-`checkpoint-500` (SFT seul) et `checkpoint-250` (SFT + DPO), mêmes
-paramètres de décodage. Rapport dans `docs/evaluation_dpo.md`.
-
-**Ce qu'on trouve** :
-
-- Le faux négatif le plus critique (cas de syndrome de Cushing, exemple 4)
-  n'est pas corrigé : réponse identique avant et après, "Diabète insipide",
-  toujours faux.
-- Un signe de dégradation du français malgré `beta=0.3` : sur l'exemple 1,
-  la réponse après DPO part en français puis bascule en plein milieu sur du
-  texte anglais, alors que rien dans la question ne le justifie.
-- Pas d'amélioration claire de la justesse ailleurs, et des hallucinations
-  nouvelles ou plus marquées après DPO : un volume de lait maternel de
-  "cinq litres" par jour inventé (exemple 3), un terme médical inventé
-  ("syndrome diabétique butyrique", exemple 5), une statistique de
-  prévalence non vérifiable ("1 sur un million", exemple 8). Deux réponses
-  anglaises (exemples 7 et 10) dégénèrent en texte tronqué et peu lisible en
-  fin de génération après DPO, alors que ce n'était pas le cas avant.
-
-**Hypothèse probable** : les métriques d'entraînement (`rewards/accuracies`
-en hausse, `eval_loss` en baisse, voir plus haut) montrent que le modèle
-apprend à distinguer chosen de rejected sur le dataset d'entraînement, mais
-UltraMedical-Preference tend à préférer des réponses plus longues et
-détaillées, pas nécessairement plus justes cliniquement. Le modèle semble
-avoir en partie appris à être plus disert, pas plus exact ou plus sûr. Mode
-d'échec connu du DPO/RLHF (optimiser la forme préférée par les annotateurs
-plutôt que le fond).
-
-**Remarque technique en passant** : le texte "avant DPO" généré par ce
-script diffère légèrement de celui déjà documenté dans
-`docs/evaluation_sft.md` pour les mêmes exemples et les mêmes paramètres de
-génération (`do_sample=False`). Léger défaut de déterminisme du décodage
-greedy sur GPU avec certains noyaux d'attention (comportement connu, pas
-propre à ce projet). Les deux versions restent comparables qualitativement
-(mêmes types d'erreurs), mais ce n'est pas une reproductibilité bit à bit.
-
-**Ce qu'il faut faire avec ça** : documenter honnêtement dans le rapport
-final comme limite du POC, avec ces exemples concrets plutôt que de
-présenter seulement les métriques d'entraînement qui, prises seules,
-suggéraient une amélioration. Ne pas relancer un DPO différent sans
-hypothèse plus solide sur ce qui manque (plus de données ne corrige pas
-forcément un problème de justesse factuelle sur un modèle de 1,7 milliard
-de paramètres). Garder pour la roadmap de passage à l'échelle : DPO sur un
-modèle plus grand, paires de préférence construites spécifiquement pour la
-justesse clinique plutôt que reprises telles quelles d'un dataset généraliste.
 
 ## Génération SFT en boucle : problème de décodage, pas du modèle
 
@@ -228,3 +126,141 @@ honnêtement plutôt que des métriques seules.
 **Comment vérifier plus tard** : refaire tourner `scripts/evaluate_sft.py`
 (ou son équivalent DPO) sur les mêmes exemples après le DPO, comparer
 diagnostic par diagnostic.
+
+## Run epochs2 : confirmation du choix de checkpoint-500, pas de changement
+
+**Statut** : résolu, 2026-09-22.
+
+**Le problème** : après avoir observé le sur apprentissage à partir du step
+500 sur le run `complet` (voir plus haut), test ciblé pour vérifier
+l'hypothèse : relancer un run dédié à 2 epochs (`--epochs 2 --nom-run
+epochs2`, mêmes hyperparamètres et seed sinon) pour voir si un entraînement
+prévu pour s'arrêter à 500 steps fait mieux que `checkpoint-500` extrait
+d'un run prévu pour 750 steps.
+
+**Ce qu'on a trouvé** : les deux courbes `eval_loss` sont quasiment
+superposées step par step (ex. step 250 : 1,3022 vs 1,3042), ce qui confirme
+la reproductibilité du pipeline. Au step 500, `checkpoint-500` du run
+`complet` reste légèrement meilleur (1,2875) que la fin du run `epochs2`
+(1,2930). Explication probable : le learning rate suit un schedule qui
+décroît jusqu'à la fin prévue de l'entraînement. Dans `epochs2` (prévu pour
+500 steps), le LR est déjà à zéro au step 500. Dans `complet` (prévu pour
+750 steps), il reste encore un peu de marge à ce stade, d'où le léger
+avantage.
+
+**Décision** : garder `checkpoint-500` du run `complet` comme référence pour
+le DPO, sans changement. Ce test confirme le choix plutôt qu'il ne le remet
+en cause.
+
+**Pourquoi ce choix** : la différence entre les deux (0,0055 en eval_loss)
+est négligeable, et `checkpoint-500` du run `complet` est déjà légèrement
+meilleur, pas de raison de changer.
+
+**Ce qu'on garde de cette expérience** : un exemple concret de démarche
+méthodique pour le rapport (observation du sur apprentissage, hypothèse,
+test ciblé, confirmation), et une vérification indépendante de la
+reproductibilité du pipeline (seed fixé, résultats cohérents d'un run à
+l'autre).
+
+## Checkpoint DPO retenu : checkpoint-250, pas le checkpoint final
+
+**Statut** : résolu, 2026-09-22.
+
+**Le problème** : run complet DPO (`scripts/train_dpo.py`, 313 steps, 1 epoch
+sur 5000 paires sous échantillonnées, à partir de `checkpoint-500` du SFT
+fusionné) terminé sans erreur. `eval_loss` baisse jusqu'au step 250 (0,3830,
+minimum), puis remonte légèrement (0,4008 au step 300, 0,4031 au step final
+313). Même schéma de léger sur apprentissage en toute fin d'entraînement que
+pour le SFT.
+
+**Ce qu'on observe côté métriques DPO** : `rewards/accuracies` (fréquence à
+laquelle le modèle préfère la réponse chosen) passe de 69% en début
+d'entraînement à un plateau autour de 76 à 82% dans la seconde moitié.
+`rewards/margins` (écart de score entre chosen et rejected) grimpe de 0,5 à
+un plateau autour de 1,4 à 1,9. Le modèle apprend bien à séparer les deux
+réponses dans le bon sens.
+
+**Décision** : garder `checkpoint-250` (meilleure eval_loss) comme modèle
+DPO de référence, pas `checkpoint_final` (step 313), même raisonnement que
+pour `checkpoint-500` du SFT.
+
+**Comment vérifier plus tard** : évaluer `checkpoint-250` sur `eval_clinique`
+et comparer aux générations `checkpoint-500` (avant DPO) déjà documentées
+dans `docs/evaluation_sft.md`, en particulier sur les faux négatifs et
+l'hallucination de médicament déjà repérés.
+
+## Comparaison avant / après DPO sur eval_clinique : pas d'amélioration claire
+
+**Statut** : observé, 2026-09-22, à traiter comme limite documentée du POC.
+
+**Le problème** : `scripts/evaluate_dpo.py` génère les mêmes 5 exemples
+français (déjà dans `docs/evaluation_sft.md`) et 5 exemples anglais, avec
+`checkpoint-500` (SFT seul) et `checkpoint-250` (SFT + DPO), mêmes
+paramètres de décodage. Rapport dans `docs/evaluation_dpo.md`.
+
+**Ce qu'on trouve** :
+
+- Le faux négatif le plus critique (cas de syndrome de Cushing, exemple 4)
+  n'est pas corrigé : réponse identique avant et après, "Diabète insipide",
+  toujours faux.
+- Un signe de dégradation du français malgré `beta=0.3` : sur l'exemple 1,
+  la réponse après DPO part en français puis bascule en plein milieu sur du
+  texte anglais, alors que rien dans la question ne le justifie.
+- Pas d'amélioration claire de la justesse ailleurs, et des hallucinations
+  nouvelles ou plus marquées après DPO : un volume de lait maternel de
+  "cinq litres" par jour inventé (exemple 3), un terme médical inventé
+  ("syndrome diabétique butyrique", exemple 5), une statistique de
+  prévalence non vérifiable ("1 sur un million", exemple 8). Deux réponses
+  anglaises (exemples 7 et 10) dégénèrent en texte tronqué et peu lisible en
+  fin de génération après DPO, alors que ce n'était pas le cas avant.
+
+**Hypothèse probable** : les métriques d'entraînement (`rewards/accuracies`
+en hausse, `eval_loss` en baisse, voir plus haut) montrent que le modèle
+apprend à distinguer chosen de rejected sur le dataset d'entraînement, mais
+UltraMedical-Preference tend à préférer des réponses plus longues et
+détaillées, pas nécessairement plus justes cliniquement. Le modèle semble
+avoir en partie appris à être plus disert, pas plus exact ou plus sûr. Mode
+d'échec connu du DPO/RLHF (optimiser la forme préférée par les annotateurs
+plutôt que le fond).
+
+**Remarque technique en passant** : le texte "avant DPO" généré par ce
+script diffère légèrement de celui déjà documenté dans
+`docs/evaluation_sft.md` pour les mêmes exemples et les mêmes paramètres de
+génération (`do_sample=False`). Léger défaut de déterminisme du décodage
+greedy sur GPU avec certains noyaux d'attention (comportement connu, pas
+propre à ce projet). Les deux versions restent comparables qualitativement
+(mêmes types d'erreurs), mais ce n'est pas une reproductibilité bit à bit.
+
+**Ce qu'il faut faire avec ça** : documenter honnêtement dans le rapport
+final comme limite du POC, avec ces exemples concrets plutôt que de
+présenter seulement les métriques d'entraînement qui, prises seules,
+suggéraient une amélioration. Ne pas relancer un DPO différent sans
+hypothèse plus solide sur ce qui manque (plus de données ne corrige pas
+forcément un problème de justesse factuelle sur un modèle de 1,7 milliard
+de paramètres). Garder pour la roadmap de passage à l'échelle : DPO sur un
+modèle plus grand, paires de préférence construites spécifiquement pour la
+justesse clinique plutôt que reprises telles quelles d'un dataset généraliste.
+
+## Modèle retenu pour la démo : SFT + DPO malgré l'absence d'amélioration claire
+
+**Statut** : résolu, 2026-09-22.
+
+**Le problème** : la comparaison avant/après DPO (voir plus haut) ne montre
+pas d'amélioration claire, et quelques régressions (code switching, deux
+hallucinations plus marquées). Question à trancher : déployer le modèle SFT
++ DPO tel quel pour la démo (étape 4), ou revenir au SFT seul
+(`checkpoint-500`) ?
+
+**Décision** : garder SFT + DPO (`checkpoint-250`) pour la démo.
+
+**Pourquoi ce choix** : la mission demande explicitement de suivre la
+méthodologie SFT puis DPO (`docs/contexte.md`), et la grille d'évaluation
+valorise une analyse critique honnête des résultats plutôt qu'un résultat
+parfait. Documenter un DPO qui n'apporte pas le bénéfice espéré, avec des
+exemples concrets à l'appui, est une démonstration de rigueur méthodologique
+en soi.
+
+**Comment vérifier plus tard** : si le temps le permet, reprendre le DPO
+comme axe d'amélioration pour la roadmap de passage à l'échelle (paires de
+préférence construites spécifiquement pour la justesse clinique, modèle
+plus grand), plutôt que de retenter un DPO similaire sur ce POC.
