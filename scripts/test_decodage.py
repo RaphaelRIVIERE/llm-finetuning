@@ -7,7 +7,8 @@ from pathlib import Path
 from datasets import load_dataset
 from vllm import LLM, SamplingParams
 
-CHEMIN_MODELE = "runs/final"
+from app.config import CHEMIN_MODELE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN
+
 DOSSIER_DATASET = Path("data/export/sft")
 N_FRANCAIS = 5
 N_ANGLAIS = 5
@@ -160,9 +161,12 @@ if __name__ == "__main__":
         exemples = list(exemples_fr) + list(exemples_en)
     instructions = [ex["instruction"] for ex in exemples]
 
-    # Mêmes réglages mémoire que l'API (app/main.py).
+    # Mêmes réglages mémoire que l'API, lus dans app/config.py.
     print("Chargement du modèle dans vLLM (peut prendre quelques minutes)...", flush=True)
-    llm = LLM(model=CHEMIN_MODELE, dtype="bfloat16", gpu_memory_utilization=0.8, max_model_len=4096)
+    llm = LLM(
+        model=CHEMIN_MODELE, dtype="bfloat16",
+        gpu_memory_utilization=GPU_MEMORY_UTILIZATION, max_model_len=MAX_MODEL_LEN,
+    )
 
     resultats = {}
     for nom, params in config["configurations"].items():

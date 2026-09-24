@@ -1,26 +1,19 @@
 """Service FastAPI qui expose le modèle de triage via vLLM."""
 
-import os
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from starlette.concurrency import iterate_in_threadpool
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 from vllm.utils import random_uuid
 
+from app.config import (
+    CHEMIN_MODELE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, PARAMETRES_DECODAGE,
+)
 from app.database import Base, SessionLocale, moteur
 from app.models import Interaction, Log
 from app.schemas import ReponseTriage, RequeteTriage
-
-CHEMIN_MODELE = os.environ.get("CHEMIN_MODELE", "runs/final")
-MAX_NOUVEAUX_TOKENS = 512
-FREQUENCY_PENALTY = 0.5
-# Défaut vLLM (~0.9) trop haut sur un GPU 8 Go partagé avec le reste du système (WSL).
-GPU_MEMORY_UTILIZATION = float(os.environ.get("GPU_MEMORY_UTILIZATION", "0.8"))
-# Défaut du modèle (32768) réserve plus de cache KV que ce qu'il reste de VRAM après
-# le chargement des poids. Les instructions et réponses de triage sont courtes.
-MAX_MODEL_LEN = int(os.environ.get("MAX_MODEL_LEN", "4096"))
 
 moteurs = {}
 
@@ -74,14 +67,7 @@ async def sante():
 
 @app.post("/triage", response_model=ReponseTriage)
 async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
-    # frequency_penalty remplace le couple repetition_penalty + no_repeat_ngram_size de
-    # l'évaluation Transformers, choix testé dans scripts/test_decodage.py
-    # (voir docs/experimentations.md).
-    params = SamplingParams(
-        max_tokens=MAX_NOUVEAUX_TOKENS,
-        temperature=0.0,
-        frequency_penalty=FREQUENCY_PENALTY,
-    )
+    params = SamplingParams(**PARAMETRES_DECODAGE)
     id_requete = random_uuid()
 
     debut_generation = time.perf_counter()
@@ -89,6 +75,8 @@ async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
     async for sortie in moteurs["llm"].generate(requete.instruction, params, id_requete):
         sortie_finale = sortie
     duree_generation_ms = (time.perf_counter() - debut_generation) * 1000
+    if sortie_finale is None:
+        raise HTTPException(status_code=500, detail="Le modèle n'a renvoyé aucune sortie")
     reponse = sortie_finale.outputs[0].text
 
     async with SessionLocale() as session:
