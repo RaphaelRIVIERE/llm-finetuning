@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.constantes import REPONSE_FACTICE
+from tests.constantes import CLE_API, REPONSE_FACTICE
 
 
 class FauxMoteur:
@@ -41,6 +41,7 @@ class FauxMoteur:
 # SQLAlchemy à l'import, et app.main importe vllm.
 DOSSIER_BASE = tempfile.mkdtemp()
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{DOSSIER_BASE}/test.db"
+os.environ["API_KEY"] = CLE_API
 
 faux_vllm = types.ModuleType("vllm")
 faux_vllm.AsyncEngineArgs = lambda **kwargs: SimpleNamespace(**kwargs)

@@ -4,6 +4,10 @@ import os
 
 CHEMIN_MODELE = os.environ.get("CHEMIN_MODELE", "runs/final")
 
+# Clé attendue dans le header X-API-Key pour appeler /triage. Pas de valeur par défaut :
+# l'API refuse de démarrer sans elle.
+API_KEY = os.environ.get("API_KEY")
+
 URL_BASE = os.environ.get(
     "DATABASE_URL", "postgresql+psycopg://triage:triage@localhost:5432/triage"
 )

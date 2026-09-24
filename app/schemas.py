@@ -8,4 +8,4 @@ class RequeteTriage(BaseModel):
 
 
 class ReponseTriage(BaseModel):
-    reponse: str
+    response: str

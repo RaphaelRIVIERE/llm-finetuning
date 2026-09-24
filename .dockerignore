@@ -1,0 +1,15 @@
+.git
+.venv
+.env
+.pytest_cache
+**/__pycache__
+
+data
+runs
+notebooks
+mlflow.db
+mlartifacts
+docs
+tests
+scripts
+src

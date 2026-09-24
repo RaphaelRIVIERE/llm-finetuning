@@ -9,6 +9,42 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      API_KEY: ${API_KEY:?API_KEY manquant dans .env}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-triage}:${POSTGRES_PASSWORD:-triage}@postgres:5432/${POSTGRES_DB:-triage}
+      # Propre à WSL2 : vLLM y coupe la mémoire pinned par défaut. Sans effet ailleurs.
+      VLLM_WSL2_ENABLE_PIN_MEMORY: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./runs/final:/modele:ro
+      # Garde le cache de compilation de vLLM entre deux lancements.
+      - cache_vllm:/root/.cache
+    # vLLM échange entre ses processus via la mémoire partagée, trop petite par défaut.
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      # Chargement du modèle et compilation vLLM avant que /health réponde.
+      start_period: 180s
 
 volumes:
   postgres_data:
+  cache_vllm:

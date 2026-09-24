@@ -1,15 +1,17 @@
 """Service FastAPI qui expose le modèle de triage via vLLM."""
 
+import secrets
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.security import APIKeyHeader
 from starlette.concurrency import iterate_in_threadpool
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 from vllm.utils import random_uuid
 
 from app.config import (
-    CHEMIN_MODELE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, PARAMETRES_DECODAGE,
+    API_KEY, CHEMIN_MODELE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, PARAMETRES_DECODAGE,
 )
 from app.database import Base, SessionLocale, moteur
 from app.models import Interaction, Log
@@ -20,6 +22,8 @@ moteurs = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not API_KEY:
+        raise RuntimeError("API_KEY n'est pas défini, l'API refuse de démarrer sans clé")
     args = AsyncEngineArgs(
         model=CHEMIN_MODELE, dtype="bfloat16",
         gpu_memory_utilization=GPU_MEMORY_UTILIZATION, max_model_len=MAX_MODEL_LEN,
@@ -32,6 +36,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Agent de triage CHSA", lifespan=lifespan)
+
+entete_cle = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def verifier_cle(cle: str | None = Depends(entete_cle)):
+    # compare_digest évite de laisser deviner la clé au temps de réponse.
+    if cle is None or not secrets.compare_digest(cle, API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 @app.middleware("http")
@@ -60,12 +72,12 @@ async def journaliser_requetes(request: Request, call_next):
     return reponse
 
 
-@app.get("/sante")
-async def sante():
-    return {"statut": "ok"}
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
-@app.post("/triage", response_model=ReponseTriage)
+@app.post("/triage", response_model=ReponseTriage, dependencies=[Depends(verifier_cle)])
 async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
     params = SamplingParams(**PARAMETRES_DECODAGE)
     id_requete = random_uuid()
@@ -76,7 +88,7 @@ async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
         sortie_finale = sortie
     duree_generation_ms = (time.perf_counter() - debut_generation) * 1000
     if sortie_finale is None:
-        raise HTTPException(status_code=500, detail="Le modèle n'a renvoyé aucune sortie")
+        raise HTTPException(status_code=500, detail="The model returned no output")
     reponse = sortie_finale.outputs[0].text
 
     async with SessionLocale() as session:
@@ -88,4 +100,4 @@ async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
         await session.commit()
         request.state.interaction_id = interaction.id
 
-    return ReponseTriage(reponse=reponse)
+    return ReponseTriage(response=reponse)
