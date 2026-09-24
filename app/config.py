@@ -12,6 +12,9 @@ URL_BASE = os.environ.get(
     "DATABASE_URL", "postgresql+psycopg://triage:triage@localhost:5432/triage"
 )
 
+# bfloat16 conseillé par vLLM sur GPU comme sur CPU (float16 instable sur CPU).
+DTYPE = os.environ.get("DTYPE", "bfloat16")
+
 # Défaut vLLM (~0.9) trop haut sur un GPU 8 Go partagé avec le reste du système (WSL).
 GPU_MEMORY_UTILIZATION = float(os.environ.get("GPU_MEMORY_UTILIZATION", "0.8"))
 # Défaut du modèle (32768) réserve plus de cache KV que ce qu'il reste de VRAM après

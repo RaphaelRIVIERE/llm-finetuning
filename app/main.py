@@ -11,7 +11,8 @@ from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 from vllm.utils import random_uuid
 
 from app.config import (
-    API_KEY, CHEMIN_MODELE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, PARAMETRES_DECODAGE,
+    API_KEY, CHEMIN_MODELE, DTYPE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN,
+    PARAMETRES_DECODAGE,
 )
 from app.database import Base, SessionLocale, moteur
 from app.models import Interaction, Log
@@ -25,7 +26,7 @@ async def lifespan(app: FastAPI):
     if not API_KEY:
         raise RuntimeError("API_KEY n'est pas défini, l'API refuse de démarrer sans clé")
     args = AsyncEngineArgs(
-        model=CHEMIN_MODELE, dtype="bfloat16",
+        model=CHEMIN_MODELE, dtype=DTYPE,
         gpu_memory_utilization=GPU_MEMORY_UTILIZATION, max_model_len=MAX_MODEL_LEN,
     )
     moteurs["llm"] = AsyncLLMEngine.from_engine_args(args)
