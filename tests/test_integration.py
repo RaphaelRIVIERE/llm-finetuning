@@ -21,8 +21,7 @@ pytestmark = pytest.mark.skipif(API_URL is None, reason="API_URL non défini, pa
 
 
 def test_douleur_thoracique_oriente_vers_le_coeur():
-    # Urgence vitale typique, où un faux négatif serait le pire scénario pour un agent
-    # de triage. Exemple 3 de docs/test_decodage_vllm_3.md, bien traité par le modèle.
+    # Urgence vitale typique, où un faux négatif serait le pire scénario pour un agent de triage.
     instruction = (
         "J'ai 58 ans, je fume, et j'ai une douleur dans la poitrine qui serre et qui "
         "descend dans le bras gauche depuis 30 minutes. Qu'est-ce que j'ai ?"

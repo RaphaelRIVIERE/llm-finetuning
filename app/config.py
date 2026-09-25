@@ -22,8 +22,7 @@ GPU_MEMORY_UTILIZATION = float(os.environ.get("GPU_MEMORY_UTILIZATION", "0.8"))
 MAX_MODEL_LEN = int(os.environ.get("MAX_MODEL_LEN", "4096"))
 
 # Passés tels quels à SamplingParams. frequency_penalty remplace le couple
-# repetition_penalty + no_repeat_ngram_size de l'évaluation Transformers, choix testé
-# dans scripts/test_decodage.py (voir docs/experimentations.md).
+# repetition_penalty + no_repeat_ngram_size de l'évaluation Transformers
 PARAMETRES_DECODAGE = dict(
     max_tokens=512,
     temperature=0.0,
