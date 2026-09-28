@@ -11,10 +11,19 @@ from scripts.anonymisation import anonymize_mediqal, anonymize_ultramedical_pref
 RATIOS_SPLITS = {"train": 0.8, "validation": 0.1, "test": 0.05, "eval_clinique": 0.05}
 TAILLE_CIBLE_SFT = 5000
 
+# Commits Hugging Face des sources, fixés pour que le dataset produit ne change pas si un
+# auteur met à jour sa source. Ce sont les versions utilisées pour l'exploration.
+REVISIONS = {
+    "ANR-MALADES/MediQAl": "5af34948a74c7b8807c476204a21149ffb00ea2c",
+    "nthngdy/frenchmedmcqa": "6195120803580d171cbf2172c0beac03f21d14fb",
+    "keivalya/MedQuad-MedicalQnADataset": "5b0961fbaa6d7f9c344c5d59c29943fb900c2eca",
+    "TsinghuaC3I/UltraMedical-Preference": "761eb7935310ba662a96d93c5af342e5269d5759",
+}
+
 
 def load_mediqa():
     """Charge MediQAl (config oeq). Split laissé à None, assigné plus tard sur l'agrégat."""
-    dataset = load_dataset("ANR-MALADES/MediQAl", "oeq")
+    dataset = load_dataset("ANR-MALADES/MediQAl", "oeq", revision=REVISIONS["ANR-MALADES/MediQAl"])
     records = []
     for split in dataset.values():
         for ex in split:
@@ -46,7 +55,7 @@ LETTRES_FRENCHMEDMCQA = ["a", "b", "c", "d", "e"]
 def load_frenchmedmcqa():
     """Charge FrenchMedMCQA et reformule le QCM en question/réponse. `correct_answers`
     est l'index (0 à 4) de la bonne proposition, pas un ClassLabel."""
-    dataset = load_dataset("nthngdy/frenchmedmcqa")
+    dataset = load_dataset("nthngdy/frenchmedmcqa", revision=REVISIONS["nthngdy/frenchmedmcqa"])
     records = []
     for split_name, split in dataset.items():
         for ex in split:
@@ -75,7 +84,7 @@ def load_frenchmedmcqa():
 
 def load_medquad():
     """Charge MedQuAD. Split laissé à None, dédoublonnage fait plus tard sur l'agrégat."""
-    dataset = load_dataset("keivalya/MedQuad-MedicalQnADataset")
+    dataset = load_dataset("keivalya/MedQuad-MedicalQnADataset", revision=REVISIONS["keivalya/MedQuad-MedicalQnADataset"])
     records = []
     compteur = 0
     for split in dataset.values():
@@ -101,7 +110,7 @@ def load_medquad():
 def load_ultramedical_preference():
     """Charge UltraMedical-Preference. Retire du train les prompt_id qui fuitent vers
     validation. chosen/rejected : conversations à 2 tours, on garde la réponse finale."""
-    dataset = load_dataset("TsinghuaC3I/UltraMedical-Preference")
+    dataset = load_dataset("TsinghuaC3I/UltraMedical-Preference", revision=REVISIONS["TsinghuaC3I/UltraMedical-Preference"])
     fuite = set(dataset["train"]["prompt_id"]) & set(dataset["validation"]["prompt_id"])
     records = []
     compteur = 0

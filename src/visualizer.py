@@ -1,8 +1,21 @@
+from pathlib import Path
+
 import pandas as pd
 import seaborn as sns
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.container import BarContainer
+from matplotlib.figure import Figure
+
+FIGURES_DIR = Path(__file__).resolve().parent.parent / "figures"
+
+
+def save_figure(fig: Figure, name: str, figures_dir: Path = FIGURES_DIR):
+    """Enregistre la figure en PNG dans figures/. `name` peut contenir un sous dossier,
+    par exemple "01_exploration_sources/tailles_par_split"."""
+    path = Path(figures_dir) / f"{name}.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
 
 
 def _apply_formatting(

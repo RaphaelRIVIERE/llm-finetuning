@@ -1,7 +1,6 @@
 """Anonymisation ciblée de MediQAl (noms de patients) et d'UltraMedical-
 Preference (emails, téléphones personnels). FrenchMedMCQA et MedQuAD n'ont
-rien à anonymiser. Détail et justification :
-notebooks/04_exploration_anonymisation.ipynb.
+rien à anonymiser.
 
 Limite connue : un prénom sans titre que Presidio ne détecte pas comme
 PERSON peut passer à travers les deux passes MediQAl.
