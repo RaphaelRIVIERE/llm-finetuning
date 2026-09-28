@@ -19,7 +19,7 @@ COPY app ./app
 
 ENV PATH="/app/.venv/bin:$PATH"
 # Les bibliothèques CUDA 13 arrivent avec torch mais pas sur le chemin du chargeur
-# dynamique (voir docs/decisions.md).
+# dynamique : sans cette ligne, l'import de vllm échoue sur libcudart.so.13.
 ENV LD_LIBRARY_PATH="/app/.venv/lib/python3.12/site-packages/nvidia/cu13/lib"
 # FlashInfer compile ses kernels à la volée et échoue sans nvcc. vLLM retombe alors sur
 # son échantillonnage standard.
