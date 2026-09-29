@@ -42,7 +42,7 @@ class SortieTriage(BaseModel):
 
 
 def vers_json(sortie: SortieTriage) -> str:
-    """Écrit la sortie en JSON, toujours au même format (accents gardés tels quels)."""
+    """Écrit la sortie en JSON, accents gardés."""
     return json.dumps(sortie.model_dump(mode="json"), ensure_ascii=False)
 
 
@@ -63,10 +63,9 @@ class ResultatParsing:
 
 
 def extraire_json(texte: str) -> dict | None:
-    """Renvoie le premier objet JSON trouvé dans le texte, ou None.
+    """Renvoie le premier objet JSON du texte, ou None.
 
-    Le modèle peut entourer le JSON de texte ou d'un bloc ```json. On essaie de lire
-    un objet à partir de chaque accolade ouvrante, et on garde le premier qui passe.
+    Le modèle peut entourer le JSON de texte ou d'un bloc ```json.
     """
     decodeur = json.JSONDecoder()
     debut = texte.find("{")
