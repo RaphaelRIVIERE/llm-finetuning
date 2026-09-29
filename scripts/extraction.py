@@ -6,7 +6,8 @@ from collections import defaultdict
 from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 
-from scripts.anonymisation import anonymize_mediqal, anonymize_ultramedical_preference
+from scripts.anonymisation import anonymize_french_sources
+from scripts.patient_names import find_leftover_names
 
 RATIOS_SPLITS = {"train": 0.8, "validation": 0.1, "test": 0.05, "eval_clinique": 0.05}
 TAILLE_CIBLE_SFT = 5000
@@ -107,9 +108,16 @@ def load_medquad():
     return records
 
 
+# Questions de forum écrites par de vrais patients, avec parfois leur nom, leur ville ou
+# leur numéro (notebook 02). Écartées plutôt qu'anonymisées : aucun motif ne garantit de
+# tout retirer, et le DPO garde largement assez de paires sans elles.
+ORIGINES_ULTRAMEDICAL_ECARTEES = {"ChatDoctor", "Medical-Instruct-120k"}
+
+
 def load_ultramedical_preference():
-    """Charge UltraMedical-Preference. Retire du train les prompt_id qui fuitent vers
-    validation. chosen/rejected : conversations à 2 tours, on garde la réponse finale."""
+    """Charge UltraMedical-Preference en gardant la réponse finale de chosen et rejected.
+    Écarte les prompt_id du train qui fuitent vers validation, les questions de forum
+    et les paires où un nom est repéré."""
     dataset = load_dataset("TsinghuaC3I/UltraMedical-Preference", revision=REVISIONS["TsinghuaC3I/UltraMedical-Preference"])
     fuite = set(dataset["train"]["prompt_id"]) & set(dataset["validation"]["prompt_id"])
     records = []
@@ -117,6 +125,13 @@ def load_ultramedical_preference():
     for split_name, split in dataset.items():
         for ex in split:
             if split_name == "train" and ex["prompt_id"] in fuite:
+                continue
+            if ex["prompt_id"].split(",")[0] in ORIGINES_ULTRAMEDICAL_ECARTEES:
+                continue
+            prompt = ex["prompt"].strip()
+            chosen = ex["chosen"][-1]["content"].strip()
+            rejected = ex["rejected"][-1]["content"].strip()
+            if any(find_leftover_names(texte, "en") for texte in (prompt, chosen, rejected)):
                 continue
             records.append({
                 "id": f"ultramedical_preference_{compteur}",
@@ -126,9 +141,9 @@ def load_ultramedical_preference():
                 "split": split_name,
                 "niveau_confiance": "moyen",
                 "transformations": [],
-                "prompt": ex["prompt"].strip(),
-                "chosen": ex["chosen"][-1]["content"].strip(),
-                "rejected": ex["rejected"][-1]["content"].strip(),
+                "prompt": prompt,
+                "chosen": chosen,
+                "rejected": rejected,
             })
             compteur += 1
     return records
@@ -191,18 +206,17 @@ def assign_splits(records, seed=42):
 
 
 def build_sft_dataset():
-    """Agrège MediQA, FrenchMedMCQA et MedQuAD au format commun, dédoublonne,
-    anonymise MediQAl, puis répartit en train/validation/test/eval_clinique.
-    L'anonymisation (voir scripts/anonymisation.py) est faite après le
-    dédoublonnage, sur le texte original : deux cas cliniques distincts qui ne
-    diffèrent que par le nom du patient ne doivent pas devenir des doublons une
-    fois [PATIENT] substitué."""
+    """Agrège MediQA, FrenchMedMCQA et MedQuAD, dédoublonne, anonymise, puis répartit en
+    train/validation/test/eval_clinique.
+
+    On anonymise après le dédoublonnage : deux cas qui ne diffèrent que par le nom du
+    patient deviendraient sinon des doublons."""
     records = []
     records += load_mediqa()
     records += load_frenchmedmcqa()
     records += load_medquad()
     records = clean_sft_dataset(records)
-    records = anonymize_mediqal(records)
+    records = anonymize_french_sources(records)
     return assign_splits(records)
 
 
@@ -232,9 +246,6 @@ def build_sft_sample():
 
 
 def build_dpo_dataset():
-    """Construit le dataset DPO : charge UltraMedical-Preference (fuite déjà
-    retirée), dédoublonne les triples exacts, puis anonymise les quelques
-    emails et numéros de téléphone personnels présents dans le corpus."""
+    """Charge UltraMedical-Preference puis dédoublonne les triples exacts."""
     records = load_ultramedical_preference()
-    records = clean_dpo_dataset(records)
-    return anonymize_ultramedical_preference(records)
+    return clean_dpo_dataset(records)
