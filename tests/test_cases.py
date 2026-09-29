@@ -1,6 +1,6 @@
-"""Tests de la normalisation des cas et du filtre des cas de triage."""
+"""Tests de la normalisation des cas, de la clé de cas et du filtre des cas de triage."""
 
-from scripts.cases import is_triage_case, normalize_text
+from scripts.cases import case_key, is_triage_case, normalize_text
 
 
 def test_case_and_whitespace_ignored():
@@ -19,6 +19,24 @@ def test_typographic_apostrophe_ignored():
 
 def test_different_texts_stay_different():
     assert normalize_text("Homme de 58 ans") != normalize_text("Homme de 85 ans")
+
+
+# Un cas MediQAl et sa suite : même patient, un paragraphe de plus.
+CASE_START = "Madame [PATIENT], 60 ans, est hospitalisée en urgence pour hyperthermie et frissons. Un myélome a été diagnostiqué."
+
+
+def test_follow_up_case_has_same_key():
+    follow_up = CASE_START + " Trois jours plus tard, elle devient confuse."
+    assert case_key(follow_up) == case_key(CASE_START)
+
+
+def test_case_key_ignores_case_and_whitespace():
+    assert case_key(CASE_START.upper().replace(" ", "  ")) == case_key(CASE_START)
+
+
+def test_different_cases_have_different_keys():
+    other = "Monsieur [PATIENT], 45 ans, consulte pour une douleur thoracique apparue ce matin au repos."
+    assert case_key(other) != case_key(CASE_START)
 
 
 # Exemples réels (raccourcis) de MediQAl et UltraMedical-Preference.

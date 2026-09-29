@@ -1,5 +1,6 @@
 """Tests des règles de noms de patients. Les exemples viennent de MediQAl, raccourcis."""
 
+from scripts.anonymisation import anonymize_text
 from scripts.patient_names import find_leftover_names, replace_patient_names
 
 
@@ -142,3 +143,13 @@ def test_space_kept_before_age():
 
 def test_leftover_patient_record_in_english():
     assert leftover_kinds("Patient Name: John Doe\nDate of Birth: 01/01/1960", "en") == ["fiche patient"]
+
+
+def test_anonymize_text_replaces_names():
+    assert anonymize_text("Monsieur B., 45 ans, consulte.") == ("Monsieur [PATIENT], 45 ans, consulte.", True)
+    assert anonymize_text("Douleur thoracique depuis ce matin.") == ("Douleur thoracique depuis ce matin.", False)
+
+
+def test_anonymize_text_drops_leftover_name():
+    # « Me » n'est pas un titre des règles, mais les motifs de contrôle le voient
+    assert anonymize_text("Me Dupont est venue consulter.") is None

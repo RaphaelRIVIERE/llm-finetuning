@@ -6,7 +6,8 @@ from collections import defaultdict
 from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 
-from scripts.anonymisation import anonymize_french_sources
+from scripts.anonymisation import anonymize_french_sources, anonymize_text
+from scripts.cases import case_key, normalize_text
 from scripts.patient_names import find_leftover_names
 
 RATIOS_SPLITS = {"train": 0.8, "validation": 0.1, "test": 0.05, "eval_clinique": 0.05}
@@ -23,7 +24,7 @@ REVISIONS = {
 
 
 def load_mediqa():
-    """Charge MediQAl (config oeq). Split laissé à None, assigné plus tard sur l'agrégat."""
+    """Charge MediQAl (config oeq), sans split."""
     dataset = load_dataset("ANR-MALADES/MediQAl", "oeq", revision=REVISIONS["ANR-MALADES/MediQAl"])
     records = []
     for split in dataset.values():
@@ -50,12 +51,45 @@ def load_mediqa():
     return records
 
 
+# Les configs QCM ont aussi des cas cliniques, qui servent au triage. Le QA en texte
+# libre reste sur oeq (load_mediqa).
+CONFIGS_MEDIQAL = ["oeq", "mcqm", "mcqu"]
+
+
+def load_mediqal_cases():
+    """Cas cliniques uniques et anonymisés de MediQAl, pour le triage."""
+    cas_uniques = {}
+    for config in CONFIGS_MEDIQAL:
+        dataset = load_dataset("ANR-MALADES/MediQAl", config, revision=REVISIONS["ANR-MALADES/MediQAl"])
+        for split in dataset.values():
+            for cas in split["clinical_case"]:
+                if cas:
+                    cas_uniques.setdefault(normalize_text(cas), cas.strip())
+
+    records = []
+    for cas in sorted(cas_uniques.values()):
+        anonymise = anonymize_text(cas)
+        if anonymise is None:
+            continue
+        texte, touche = anonymise
+        records.append({
+            "id": f"mediqal_cas_{len(records)}",
+            "langue": "fr",
+            "source": "mediqal",
+            "licence_source": "CC-BY-4.0",
+            "niveau_confiance": "haut",
+            "transformations": ["anonymisation_noms"] if touche else [],
+            "cas": texte,
+            "cle_cas": case_key(texte),
+        })
+    return records
+
+
 LETTRES_FRENCHMEDMCQA = ["a", "b", "c", "d", "e"]
 
 
 def load_frenchmedmcqa():
-    """Charge FrenchMedMCQA et reformule le QCM en question/réponse. `correct_answers`
-    est l'index (0 à 4) de la bonne proposition, pas un ClassLabel."""
+    """Charge FrenchMedMCQA et reformule le QCM en question/réponse."""
     dataset = load_dataset("nthngdy/frenchmedmcqa", revision=REVISIONS["nthngdy/frenchmedmcqa"])
     records = []
     for split_name, split in dataset.items():
@@ -84,7 +118,7 @@ def load_frenchmedmcqa():
 
 
 def load_medquad():
-    """Charge MedQuAD. Split laissé à None, dédoublonnage fait plus tard sur l'agrégat."""
+    """Charge MedQuAD, sans split."""
     dataset = load_dataset("keivalya/MedQuad-MedicalQnADataset", revision=REVISIONS["keivalya/MedQuad-MedicalQnADataset"])
     records = []
     compteur = 0
@@ -115,9 +149,8 @@ ORIGINES_ULTRAMEDICAL_ECARTEES = {"ChatDoctor", "Medical-Instruct-120k"}
 
 
 def load_ultramedical_preference():
-    """Charge UltraMedical-Preference en gardant la réponse finale de chosen et rejected.
-    Écarte les prompt_id du train qui fuitent vers validation, les questions de forum
-    et les paires où un nom est repéré."""
+    """Charge UltraMedical-Preference sans les fuites train/validation, les questions de
+    forum et les paires où un nom est repéré."""
     dataset = load_dataset("TsinghuaC3I/UltraMedical-Preference", revision=REVISIONS["TsinghuaC3I/UltraMedical-Preference"])
     fuite = set(dataset["train"]["prompt_id"]) & set(dataset["validation"]["prompt_id"])
     records = []
@@ -163,8 +196,7 @@ def clean_sft_dataset(records):
 
 
 def clean_dpo_dataset(records):
-    """Retire les doublons exacts (prompt, chosen, rejected), garde la première occurrence.
-    Vérifié séparément que ces doublons ne traversent jamais deux splits différents."""
+    """Retire les doublons exacts (prompt, chosen, rejected), garde la première occurrence."""
     vus = set()
     nettoyes = []
     for record in records:
@@ -177,8 +209,7 @@ def clean_dpo_dataset(records):
 
 
 def assign_splits(records, seed=42):
-    """Répartit les records selon RATIOS_SPLITS, stratifié par source. Écrase le
-    split déjà présent sur certaines sources (FrenchMedMCQA)."""
+    """Répartit les records selon RATIOS_SPLITS, stratifié par source."""
     sources = [record["source"] for record in records]
     train, reste = train_test_split(
         records, test_size=1 - RATIOS_SPLITS["train"], stratify=sources, random_state=seed
@@ -206,11 +237,7 @@ def assign_splits(records, seed=42):
 
 
 def build_sft_dataset():
-    """Agrège MediQA, FrenchMedMCQA et MedQuAD, dédoublonne, anonymise, puis répartit en
-    train/validation/test/eval_clinique.
-
-    On anonymise après le dédoublonnage : deux cas qui ne diffèrent que par le nom du
-    patient deviendraient sinon des doublons."""
+    """Agrège les sources SFT, dédoublonne, anonymise puis répartit en splits."""
     records = []
     records += load_mediqa()
     records += load_frenchmedmcqa()
@@ -221,9 +248,8 @@ def build_sft_dataset():
 
 
 def subsample_sft_dataset(records, taille_cible=TAILLE_CIBLE_SFT, seed=42):
-    """Sous-échantillonne l'agrégat SFT à environ `taille_cible` paires, en tirant
-    une fraction proportionnelle dans chaque (source, split), pour garder les
-    proportions naturelles des sources et des splits."""
+    """Tire environ `taille_cible` paires en gardant les proportions de chaque
+    (source, split)."""
     rng = random.Random(seed)
     fraction = taille_cible / len(records)
 

@@ -17,6 +17,7 @@ SORTIE = {
     "key_symptoms": ["douleur thoracique", "irradiation au bras gauche"],
     "red_flags": ["douleur thoracique chez un homme de 58 ans"],
     "justification": "Suspicion de syndrome coronarien aigu. Prise en charge immédiate.",
+    "recommendation": "Installer le patient en salle de déchocage et faire un ECG sans attendre.",
 }
 JSON_PROPRE = json.dumps(SORTIE, ensure_ascii=False)
 
@@ -79,7 +80,7 @@ def test_mauvais_type_est_schema_invalide():
 
 
 def test_champ_vide_est_schema_invalide():
-    for champ, vide in [("key_symptoms", []), ("justification", "")]:
+    for champ, vide in [("key_symptoms", []), ("justification", ""), ("recommendation", "")]:
         sortie = {**SORTIE, champ: vide}
         assert parser_sortie(json.dumps(sortie)).statut == StatutParsing.SCHEMA_INVALIDE
 

@@ -1,5 +1,5 @@
-"""Unité de cas de chaque source, utilisée pour le dédoublonnage, le découpage et le
-contrôle de fuite. Pas de dépendance lourde ici, pour que les tests tournent dans la CI.
+"""Unité de cas de chaque source, pour le dédoublonnage, le découpage et le contrôle
+de fuite. Pas de dépendance lourde, pour que les tests tournent dans la CI.
 
 Ce qu'est un cas selon la source :
 - MediQAl : le texte du cas clinique (plusieurs questions portent sur le même cas).
@@ -17,12 +17,20 @@ APOSTROPHES = str.maketrans({"’": "'", "‘": "'", "ʼ": "'"})
 
 
 def normalize_text(text):
-    """Met le texte sous une forme stable pour comparer deux cas : unicode normalisé,
-    apostrophes unifiées, minuscules, espaces multiples et retours à la ligne ramenés à
-    un seul espace."""
+    """Normalise le texte pour comparer deux cas (unicode, apostrophes, casse, espaces)."""
     text = unicodedata.normalize("NFKC", text).translate(APOSTROPHES)
     text = WHITESPACE.sub(" ", text)
     return text.strip().casefold()
+
+
+# Certains cas MediQAl sont la suite d'un autre : même patient, un paragraphe de plus.
+# 100 caractères regroupe le plus de suites sans réunir des cas différents (notebook 01).
+CASE_KEY_LENGTH = 100
+
+
+def case_key(text):
+    """Début du texte normalisé. À calculer sur le texte anonymisé."""
+    return normalize_text(text)[:CASE_KEY_LENGTH]
 
 
 # Filtre des cas de triage : garde les cas où un patient arrive avec un problème, les seuls
@@ -68,9 +76,8 @@ EXCLUDED_EN = re.compile(
 
 
 def is_triage_case(text, language):
-    """Dit si le texte décrit un patient qui arrive avec un problème, donc un cas auquel
-    on peut donner un niveau d'urgence. Filtre simple par règles : il laisse passer du
-    bruit, l'annotation et la relecture font le tri final."""
+    """Dit si le texte décrit un patient qui arrive avec un problème. Laisse passer du
+    bruit, la relecture fait le tri final."""
     head = normalize_text(text)[:HEAD_LENGTH]
     if language == "fr":
         arrival = ARRIVAL_FR.search(head) or COMPLAINT_FR.search(head)

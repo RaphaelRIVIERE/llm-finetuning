@@ -38,6 +38,7 @@ class SortieTriage(BaseModel):
     # Peut être vide, surtout pour un cas deferred.
     red_flags: list[str]
     justification: str = Field(min_length=1)
+    recommendation: str = Field(min_length=1)
 
 
 def vers_json(sortie: SortieTriage) -> str:
