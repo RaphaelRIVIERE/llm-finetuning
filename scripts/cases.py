@@ -10,6 +10,7 @@ Ce qu'est un cas selon la source :
 
 import re
 import unicodedata
+from collections import defaultdict
 
 WHITESPACE = re.compile(r"\s+")
 # Les sources mélangent apostrophe droite et typographique (« d'urgence », « d’urgence »)
@@ -111,3 +112,13 @@ def remove_choices(text):
         return None
     # le dernier « A. » : un « A. » plus haut ferait partie du cas
     return text[:starts[-1].start()].strip()
+
+
+def find_leaks(records):
+    """Contrôle de fuite : les clés de cas présentes dans plusieurs splits. Chaque record
+    a une `cle_cas` et un `split`. On peut passer le SFT et le DPO ensemble, pour voir
+    aussi les fuites d'un dataset à l'autre. Renvoie {cle: splits}, vide sans fuite."""
+    splits_par_cle = defaultdict(set)
+    for record in records:
+        splits_par_cle[record["cle_cas"]].add(record["split"])
+    return {cle: splits for cle, splits in splits_par_cle.items() if len(splits) > 1}

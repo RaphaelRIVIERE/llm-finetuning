@@ -1,6 +1,6 @@
 """Tests de la normalisation des cas, de la clé de cas et du filtre des cas de triage."""
 
-from scripts.cases import case_key, dedupe_cases, is_triage_case, normalize_text, remove_choices
+from scripts.cases import case_key, dedupe_cases, find_leaks, is_triage_case, normalize_text, remove_choices
 
 
 def test_case_and_whitespace_ignored():
@@ -106,3 +106,27 @@ def test_choices_removed():
 
 def test_text_without_choices_returns_none():
     assert remove_choices(VIGNETTE + " A) Acute leukemia B) Hemolytic anemia") is None
+
+
+def example(text, split):
+    return {"cle_cas": case_key(text), "split": split}
+
+
+def test_no_leak_when_each_case_in_one_split():
+    other = "Monsieur [PATIENT], 45 ans, consulte pour une douleur thoracique apparue ce matin au repos."
+    records = [example(CASE_START, "train"), example(CASE_START, "train"), example(other, "test")]
+    assert find_leaks(records) == {}
+
+
+def test_follow_up_in_other_split_is_a_leak():
+    follow_up = CASE_START + " Trois jours plus tard, elle devient confuse."
+    leaks = find_leaks([example(CASE_START, "train"), example(follow_up, "test")])
+    assert leaks == {case_key(CASE_START): {"train", "test"}}
+
+
+def test_leak_seen_between_sft_and_dpo():
+    # Une question MedQuAD recopiée mot pour mot dans UltraMedical
+    question = "What are the symptoms of Glaucoma ?"
+    sft = [example(question, "test")]
+    dpo = [example(question, "train")]
+    assert find_leaks(sft + dpo) == {case_key(question): {"train", "test"}}

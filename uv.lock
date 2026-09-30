@@ -3011,6 +3011,7 @@ test = [
     { name = "aiosqlite" },
     { name = "httpx" },
     { name = "pytest" },
+    { name = "scikit-learn" },
 ]
 training = [
     { name = "accelerate" },
@@ -3051,6 +3052,7 @@ test = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pytest", specifier = ">=9.1.1" },
+    { name = "scikit-learn", specifier = ">=1.9.0" },
 ]
 training = [
     { name = "accelerate", specifier = ">=1.15.0" },

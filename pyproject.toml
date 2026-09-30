@@ -53,6 +53,7 @@ test = [
     "aiosqlite>=0.22.1",
     "httpx>=0.28.1",
     "pytest>=9.1.1",
+    "scikit-learn>=1.9.0",
 ]
 dev = [
     "en-core-web-md",
