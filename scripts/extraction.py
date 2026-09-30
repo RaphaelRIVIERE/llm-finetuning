@@ -7,7 +7,7 @@ from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 
 from scripts.anonymisation import anonymize_french_sources, anonymize_text
-from scripts.cases import case_key, normalize_text
+from scripts.cases import case_key, dedupe_cases, is_triage_case, normalize_text, remove_choices
 from scripts.patient_names import find_leftover_names
 
 RATIOS_SPLITS = {"train": 0.8, "validation": 0.1, "test": 0.05, "eval_clinique": 0.05}
@@ -180,6 +180,49 @@ def load_ultramedical_preference():
             })
             compteur += 1
     return records
+
+
+def load_ultramedical_cases():
+    """Prompts uniques d'UltraMedical-Preference, pour le triage, sans les choix du QCM.
+    Mêmes exclusions que load_ultramedical_preference : forums écartés, prompts où un nom
+    est repéré. Les prompts sans choix au format « A. » sont écartés aussi."""
+    dataset = load_dataset("TsinghuaC3I/UltraMedical-Preference", revision=REVISIONS["TsinghuaC3I/UltraMedical-Preference"])
+    prompts_uniques = {}
+    for split in dataset.values():
+        for prompt, prompt_id in zip(split["prompt"], split["prompt_id"]):
+            if prompt_id.split(",")[0] in ORIGINES_ULTRAMEDICAL_ECARTEES:
+                continue
+            prompts_uniques.setdefault(normalize_text(prompt), prompt.strip())
+
+    records = []
+    for prompt in sorted(prompts_uniques.values()):
+        if find_leftover_names(prompt, "en"):
+            continue
+        cas = remove_choices(prompt)
+        if cas is None:
+            continue
+        records.append({
+            "id": f"ultramedical_cas_{len(records)}",
+            "langue": "en",
+            "source": "ultramedical_preference",
+            "licence_source": "MIT",
+            "niveau_confiance": "moyen",
+            "transformations": ["retrait_choix_qcm"],
+            "cas": cas,
+            "cle_cas": case_key(cas),
+        })
+    return records
+
+
+def load_triage_cases():
+    """Cas à annoter : les cas de triage de MediQAl et d'UltraMedical, un seul par clé de
+    cas. Entre les deux sources, le texte ne peut pas trouver de doublon (français contre
+    anglais), le dédoublonnage se fait donc dans chaque source."""
+    records = []
+    for record in load_mediqal_cases() + load_ultramedical_cases():
+        if is_triage_case(record["cas"], record["langue"]):
+            records.append(record)
+    return dedupe_cases(records)
 
 
 def clean_sft_dataset(records):

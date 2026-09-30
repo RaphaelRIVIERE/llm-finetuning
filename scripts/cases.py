@@ -86,3 +86,28 @@ def is_triage_case(text, language):
         arrival = AGE_EN.search(head) and ARRIVAL_EN.search(head)
         return bool(arrival) and not EXCLUDED_EN.search(head)
     raise ValueError(f"langue non gérée : {language}")
+
+
+def dedupe_cases(records):
+    """Garde un seul cas par `cle_cas`, le plus court : c'est l'arrivée du patient, les
+    textes plus longs de la même clé ajoutent la suite de sa prise en charge."""
+    par_cle = {}
+    for record in records:
+        garde = par_cle.get(record["cle_cas"])
+        if garde is None or len(record["cas"]) < len(garde["cas"]):
+            par_cle[record["cle_cas"]] = record
+    return list(par_cle.values())
+
+
+# Choix d'un QCM UltraMedical : une ligne qui commence par « A. », puis B, C...
+CHOICES_START = re.compile(r"\n\s*A\.\s")
+
+
+def remove_choices(text):
+    """Retire les choix du QCM à la fin d'une vignette, qui soufflent le diagnostic.
+    Renvoie None si le texte n'a pas de choix dans ce format."""
+    starts = list(CHOICES_START.finditer(text))
+    if not starts:
+        return None
+    # le dernier « A. » : un « A. » plus haut ferait partie du cas
+    return text[:starts[-1].start()].strip()

@@ -57,6 +57,13 @@ réaction allergique grave, tentative de suicide.
   `maximum`, aucun pour un `deferred`.
 - `justification` : 2 ou 3 phrases qui expliquent le niveau, dans la langue du cas.
 - `recommendation` : une phrase courte pour l'équipe, dans la langue du cas.
+- `antecedents` : les antécédents écrits dans le cas (maladies, opérations,
+  traitements au long cours), en quelques mots. Liste vide si le cas n'en donne pas.
+- `constantes_vitales` : recopier la valeur chiffrée écrite dans le cas pour la
+  fréquence cardiaque (`fc`), la pression artérielle (`pa`), la fréquence
+  respiratoire (`fr`), la saturation (`spo2`) et la température (`temperature`).
+  Mettre `null` quand le cas ne donne pas de chiffre. Ne jamais déduire ni inventer
+  une valeur.
 
 ## Exemples
 

@@ -1,6 +1,6 @@
 """Tests de la normalisation des cas, de la clé de cas et du filtre des cas de triage."""
 
-from scripts.cases import case_key, is_triage_case, normalize_text
+from scripts.cases import case_key, dedupe_cases, is_triage_case, normalize_text, remove_choices
 
 
 def test_case_and_whitespace_ignored():
@@ -84,3 +84,25 @@ def test_english_questions_rejected():
 def test_arrival_far_in_text_ignored():
     text = "Un enfant de 6 ans a un ventricule unique pallié en période néonatale. " * 5 + "Il est admis."
     assert not is_triage_case(text, "fr")
+
+
+def test_dedupe_keeps_shortest_case_per_key():
+    follow_up = CASE_START + " Trois jours plus tard, elle devient confuse."
+    other = "Monsieur [PATIENT], 45 ans, consulte pour une douleur thoracique apparue ce matin au repos."
+    records = [{"cas": t, "cle_cas": case_key(t)} for t in [follow_up, CASE_START, other]]
+    assert sorted(r["cas"] for r in dedupe_cases(records)) == sorted([CASE_START, other])
+
+
+VIGNETTE = (
+    "A 15-year-old boy is brought to the emergency room for dyspnea and yellow skin. "
+    "What is the most likely diagnosis?"
+)
+
+
+def test_choices_removed():
+    text = VIGNETTE + "\n\nA. Acute leukemia\nB. Sideropenic anemia\nC. Hemolytic anemia\nD. Aplastic anemia"
+    assert remove_choices(text) == VIGNETTE
+
+
+def test_text_without_choices_returns_none():
+    assert remove_choices(VIGNETTE + " A) Acute leukemia B) Hemolytic anemia") is None
