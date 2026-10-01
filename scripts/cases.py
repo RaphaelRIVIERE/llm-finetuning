@@ -12,6 +12,8 @@ import re
 import unicodedata
 from collections import defaultdict
 
+from sklearn.model_selection import train_test_split
+
 WHITESPACE = re.compile(r"\s+")
 # Les sources mélangent apostrophe droite et typographique (« d'urgence », « d’urgence »)
 APOSTROPHES = str.maketrans({"’": "'", "‘": "'", "ʼ": "'"})
@@ -112,6 +114,52 @@ def remove_choices(text):
         return None
     # le dernier « A. » : un « A. » plus haut ferait partie du cas
     return text[:starts[-1].start()].strip()
+
+
+# Certaines questions MedQuAD finissent par un point d'interrogation en trop (« ...? ? »)
+DOUBLE_QUESTION_MARK = re.compile(r"\?\s*\?$")
+
+
+def remove_double_question_mark(text):
+    """Retire le point d'interrogation en trop à la fin d'une question."""
+    return DOUBLE_QUESTION_MARK.sub("?", text.strip())
+
+
+def drop_short_vignettes(records):
+    """Écarte les vignettes UltraMedical plus courtes que la clé de cas. La clé d'une
+    vignette aussi courte ne correspond plus à celle de son prompt d'origine, choix
+    compris, et la paire DPO pourrait partir dans un autre split. Elles sont aussi trop
+    pauvres pour être triées (« A neonate presented to OPD with following features »).
+    Les cas MediQAl courts sont gardés : ils n'ont pas de choix, leur clé ne change pas."""
+    return [
+        record for record in records
+        if record["source"] != "ultramedical_preference" or len(normalize_text(record["cas"])) >= CASE_KEY_LENGTH
+    ]
+
+
+def split_cases(records, seed=42):
+    """Découpe par cas en train (80 %), validation (10 %) et test (10 %), toutes sources
+    ensemble. Chaque record a une `cle_cas`, une `source` et, pour un cas de triage
+    annoté, un `urgency_level`. Tous les records d'une même clé vont dans le même split.
+    Le tirage est stratifié par source et par niveau d'urgence. Renvoie {cle_cas: split}."""
+    strates = {}
+    for record in records:
+        # le cas de triage annoté donne sa strate à toute la clé
+        if record["cle_cas"] not in strates or record.get("urgency_level"):
+            strates[record["cle_cas"]] = (record["source"], record.get("urgency_level"))
+    cles = sorted(strates)
+
+    train, reste = train_test_split(
+        cles, test_size=0.2, stratify=[str(strates[cle]) for cle in cles], random_state=seed
+    )
+    validation, test = train_test_split(
+        reste, test_size=0.5, stratify=[str(strates[cle]) for cle in reste], random_state=seed
+    )
+    splits = {}
+    for split, cles_du_split in [("train", train), ("validation", validation), ("test", test)]:
+        for cle in cles_du_split:
+            splits[cle] = split
+    return splits
 
 
 def find_leaks(records):

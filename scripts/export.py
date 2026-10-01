@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from scripts.extraction import build_dpo_dataset, build_sft_sample
+from scripts.extraction import build_dpo_dataset, build_sft_dataset
 
 DOSSIER_EXPORT = Path("data/export")
 
@@ -27,8 +27,12 @@ def export_by_split(records, output_dir):
 
 
 def export_datasets(output_dir=DOSSIER_EXPORT):
-    sft = build_sft_sample()
+    # chaque construction recharge toutes les sources (quelques minutes chacune)
+    print("construction du dataset SFT...")
+    sft = build_sft_dataset()
+    print("construction du dataset DPO...")
     dpo = build_dpo_dataset()
+    print("écriture des fichiers...")
     return {
         "sft": export_by_split(sft, output_dir / "sft"),
         "dpo": export_by_split(dpo, output_dir / "dpo"),

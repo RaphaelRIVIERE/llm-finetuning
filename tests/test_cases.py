@@ -1,6 +1,11 @@
 """Tests de la normalisation des cas, de la clé de cas et du filtre des cas de triage."""
 
-from scripts.cases import case_key, dedupe_cases, find_leaks, is_triage_case, normalize_text, remove_choices
+from collections import Counter
+
+from scripts.cases import (
+    case_key, dedupe_cases, drop_short_vignettes, find_leaks, is_triage_case, normalize_text, remove_choices,
+    remove_double_question_mark, split_cases,
+)
 
 
 def test_case_and_whitespace_ignored():
@@ -108,6 +113,27 @@ def test_text_without_choices_returns_none():
     assert remove_choices(VIGNETTE + " A) Acute leukemia B) Hemolytic anemia") is None
 
 
+def test_double_question_mark_removed():
+    question = "Who is at risk for Parasites - Cysticercosis? ?"
+    assert remove_double_question_mark(question) == "Who is at risk for Parasites - Cysticercosis?"
+
+
+def test_normal_question_unchanged():
+    question = "What is (are) Glaucoma ?"
+    assert remove_double_question_mark(question) == question
+
+
+def test_short_vignettes_dropped():
+    short = {"source": "ultramedical_preference", "cas": "A 3 year old child comes with complaint of limp diagnosis is"}
+    long = {"source": "ultramedical_preference", "cas": VIGNETTE}
+    assert drop_short_vignettes([short, long]) == [long]
+
+
+def test_short_mediqal_cases_kept():
+    short = {"source": "mediqal", "cas": "Un homme se présente après avoir reçu de l'eau de javel dans un oeil"}
+    assert drop_short_vignettes([short]) == [short]
+
+
 def example(text, split):
     return {"cle_cas": case_key(text), "split": split}
 
@@ -130,3 +156,32 @@ def test_leak_seen_between_sft_and_dpo():
     sft = [example(question, "test")]
     dpo = [example(question, "train")]
     assert find_leaks(sft + dpo) == {case_key(question): {"train", "test"}}
+
+
+def unit(n, source, urgency_level=None):
+    return {"cle_cas": f"{source} cas {n}", "source": source, "urgency_level": urgency_level}
+
+
+def test_split_keeps_ratios_in_each_stratum():
+    records = [unit(n, "mediqal", level) for level in ["maximum", "moderate", "deferred"] for n in range(100)]
+    records += [unit(n, "medquad") for n in range(200)]
+    splits = split_cases(records)
+    counts = Counter((r["source"], r["urgency_level"], splits[r["cle_cas"]]) for r in records)
+    for level in ["maximum", "moderate", "deferred"]:
+        assert [counts["mediqal", level, split] for split in ["train", "validation", "test"]] == [80, 10, 10]
+    assert [counts["medquad", None, split] for split in ["train", "validation", "test"]] == [160, 20, 20]
+
+
+def test_split_puts_all_examples_of_a_case_together():
+    # un cas de triage et deux questions QA sur le même patient
+    records = []
+    for n in range(50):
+        records += [unit(n, "mediqal"), unit(n, "mediqal", "maximum"), unit(n, "mediqal")]
+    splits = split_cases(records)
+    assert find_leaks([{**r, "split": splits[r["cle_cas"]]} for r in records]) == {}
+    assert Counter(splits.values()) == {"train": 40, "validation": 5, "test": 5}
+
+
+def test_split_is_the_same_on_each_run():
+    records = [unit(n, "mediqal", "moderate") for n in range(60)] + [unit(n, "medquad") for n in range(60)]
+    assert split_cases(records) == split_cases(records)
