@@ -19,6 +19,9 @@ def publish(repo_id=REPO_ID, dossier_export=DOSSIER_EXPORT, private=False):
         repo_type="dataset",
         folder_path=dossier_export,
         allow_patterns=["*.jsonl", "README.md"],
+        # retire du Hub les fichiers de données qui n'existent plus en local
+        # (eval_clinique.jsonl), upload_folder ne le fait pas tout seul
+        delete_patterns=["*.jsonl"],
         commit_message="Export du dataset SFT et DPO",
     )
     print(f"Publié : https://huggingface.co/datasets/{repo_id}")

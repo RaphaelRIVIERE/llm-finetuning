@@ -13,9 +13,11 @@ confiance on lui accorde, et quelles transformations lui ont été appliquées.
 | `langue`            | string | `fr` ou `en` |
 | `source`            | string | Nom du dataset d'origine : `mediqal`, `frenchmedmcqa`, `medquad`, `ultramedical_preference` |
 | `licence_source`    | string | Licence du dataset d'origine, voir `docs/sources.md` |
-| `split`             | string | `train`, `validation`, `test` ou `eval_clinique` |
+| `split`             | string | `train`, `validation` ou `test` |
 | `niveau_confiance`  | string | `haut`, `moyen`, `bas`, selon la fiabilité de l'annotation d'origine |
 | `transformations`   | liste  | Historique des étapes appliquées à l'exemple (reformulation, anonymisation, etc.) |
+| `cle_cas`           | string | Clé du cas (100 premiers caractères du texte normalisé), pour le découpage et le contrôle de fuite |
+| `tache`             | string | `triage` ou `qa` : dit quelle consigne ajouter devant le texte (`app/prompts.py`) |
 
 ## Calcul du niveau_confiance
 
@@ -45,8 +47,11 @@ façon dont son contenu a été validé.
 
 | Champ               | Type   | Description |
 | ------------------- | ------ | ----------- |
-| `instruction`       | string | La question ou consigne posée au modèle |
-| `reponse`           | string | La réponse attendue |
+| `instruction`       | string | Le cas de patient (triage) ou la question (qa), sans consigne |
+| `reponse`           | string | La réponse attendue : JSON de triage, ou texte libre pour le QA |
+| `urgency_level`     | string | Niveau d'urgence attendu (triage), vide pour le QA |
+| `annotateur`        | string | Modèle qui a produit le label de triage, vide pour le QA |
+| `version_prompt`    | string | Version de la consigne d'annotation, vide pour le QA |
 | `symptomes`         | liste  | Symptômes mentionnés dans le cas, si présents |
 | `antecedents`       | liste  | Antécédents médicaux mentionnés, si présents |
 | `constantes_vitales`| objet  | Constantes relevées (FC, PA, FR, SpO2, température...), si présentes |
@@ -58,6 +63,9 @@ façon dont son contenu a été validé.
 | `prompt`   | string | La situation ou question posée |
 | `chosen`   | string | La réponse préférée |
 | `rejected` | string | La réponse écartée |
+| `type_paire` | string | Construction de la paire dans la source : `hard`, `length`, `easy`, `human` |
+| `score_chosen` | nombre | Note sur 5 de la réponse préférée |
+| `score_rejected` | nombre | Note sur 5 de la réponse écartée |
 
 ## Vue d'ensemble
 
@@ -71,10 +79,15 @@ classDiagram
         +string split
         +string niveau_confiance
         +list transformations
+        +string cle_cas
+        +string tache
     }
     class ExempleSFT {
         +string instruction
         +string reponse
+        +string urgency_level
+        +string annotateur
+        +string version_prompt
         +list symptomes
         +list antecedents
         +dict constantes_vitales
@@ -83,12 +96,20 @@ classDiagram
         +string prompt
         +string chosen
         +string rejected
+        +string type_paire
+        +float score_chosen
+        +float score_rejected
     }
     MetadonneesCommunes <|-- ExempleSFT
     MetadonneesCommunes <|-- ExempleDPO
 ```
 
 ## Champs cliniques vides pour FrenchMedMCQA et MedQuAD
+
+Depuis le passage au triage, ces champs sont remplis seulement pour les exemples de
+triage : l'annotateur (Mistral Large) les extrait du cas en même temps que le label, et
+laisse un champ vide quand le cas n'en parle pas. Ils restent vides pour tous les
+exemples de QA, MediQAl compris. Le paragraphe suivant explique le choix d'origine.
 
 Les champs `symptomes`, `antecedents` et `constantes_vitales` restent vides pour
 FrenchMedMCQA et MedQuAD : ces sources n'ont pas le niveau de détail clinique

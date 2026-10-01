@@ -1,11 +1,14 @@
 """Export des datasets SFT et DPO finaux en JSONL, un fichier par split."""
 
 import json
+import shutil
 from pathlib import Path
 
 from scripts.extraction import build_dpo_dataset, build_sft_dataset
 
 DOSSIER_EXPORT = Path("data/export")
+# La dataset card est versionnée dans docs/, l'export la copie à côté des données
+DATASET_CARD = Path("docs/dataset_card.md")
 
 
 def write_jsonl(records, path):
@@ -33,10 +36,12 @@ def export_datasets(output_dir=DOSSIER_EXPORT):
     print("construction du dataset DPO...")
     dpo = build_dpo_dataset()
     print("écriture des fichiers...")
-    return {
+    counts = {
         "sft": export_by_split(sft, output_dir / "sft"),
         "dpo": export_by_split(dpo, output_dir / "dpo"),
     }
+    shutil.copyfile(DATASET_CARD, output_dir / "README.md")
+    return counts
 
 
 if __name__ == "__main__":
