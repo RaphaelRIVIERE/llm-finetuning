@@ -12,6 +12,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 from trl import DPOConfig, DPOTrainer
 
 from app.prompts import construire_prompt
+from scripts.suivi import enregistrer_debut_de_run, enregistrer_fin_de_run
 
 MODELE_BASE = "Qwen/Qwen3-1.7B-Base"
 CHECKPOINT_SFT = "runs/sft/complet/checkpoint-500"
@@ -103,6 +104,11 @@ def entrainer(hp: Hyperparametres, nom_run: str, train_dataset, eval_dataset):
         eval_steps=hp.eval_steps,
         save_strategy="steps",
         save_steps=hp.save_steps,
+        # en fin de run, recharge le checkpoint qui a la plus petite loss de validation :
+        # c'est lui qui est sauvegardé, pas le dernier
+        load_best_model_at_end=True,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
         report_to=["mlflow"],
     )
 
@@ -115,11 +121,14 @@ def entrainer(hp: Hyperparametres, nom_run: str, train_dataset, eval_dataset):
         peft_config=peft_config,
     )
 
+    dossier_modele = Path(hp.dossier_sortie) / nom_run / "checkpoint_final"
     mlflow.set_experiment(hp.nom_experience_mlflow)
     with mlflow.start_run(run_name=nom_run):
-        trainer.train()
-
-    trainer.save_model(f"{hp.dossier_sortie}/{nom_run}/checkpoint_final")
+        enregistrer_debut_de_run(hp, DOSSIER_DATASET, train_dataset, eval_dataset)
+        mlflow.log_param("checkpoint_sft", CHECKPOINT_SFT)
+        resultat = trainer.train()
+        trainer.save_model(str(dossier_modele))
+        enregistrer_fin_de_run(trainer, resultat, dossier_modele)
     return trainer
 
 

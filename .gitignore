@@ -17,6 +17,7 @@ runs/
 
 mlflow.db
 mlartifacts/
+mlruns/
 
 *.log
 
