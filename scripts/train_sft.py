@@ -11,6 +11,8 @@ from peft import LoraConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 from trl import SFTConfig, SFTTrainer
 
+from app.prompts import construire_prompt
+
 DOSSIER_DATASET = Path("data/export/sft")
 
 
@@ -41,14 +43,18 @@ class Hyperparametres:
     nom_experience_mlflow: str = "triage-chsa-sft"
 
 
-def charger_dataset(split, taille_max=None):
-    """Charge un split JSONL du dataset SFT et ne garde que les colonnes prompt/completion."""
+def charger_dataset(split, taille_max=None, seed=42):
+    """Charge un split JSONL du dataset SFT en colonnes prompt/completion. Le prompt est la
+    consigne de la tâche suivie du texte, construit par la même fonction que l'API."""
     dataset = load_dataset("json", data_files=str(DOSSIER_DATASET / f"{split}.jsonl"), split="train")
-    dataset = dataset.rename_columns({"instruction": "prompt", "reponse": "completion"})
-    dataset = dataset.select_columns(["prompt", "completion"])
     if taille_max is not None:
-        dataset = dataset.select(range(min(taille_max, len(dataset))))
-    return dataset
+        # le fichier commence par tous les exemples de triage : on mélange avant de couper
+        dataset = dataset.shuffle(seed=seed).select(range(min(taille_max, len(dataset))))
+    dataset = dataset.map(lambda ex: {
+        "prompt": construire_prompt(ex["tache"], ex["instruction"]),
+        "completion": ex["reponse"],
+    })
+    return dataset.select_columns(["prompt", "completion"])
 
 
 def entrainer(hp: Hyperparametres, nom_run: str, train_dataset, eval_dataset):
@@ -117,12 +123,12 @@ if __name__ == "__main__":
 
     if args_cli.pilote:
         hp.epochs = 1.0
-        train_dataset = charger_dataset("train", taille_max=200)
-        eval_dataset = charger_dataset("validation", taille_max=50)
+        train_dataset = charger_dataset("train", taille_max=200, seed=hp.seed)
+        eval_dataset = charger_dataset("validation", taille_max=50, seed=hp.seed)
         nom_run = "pilote"
     else:
-        train_dataset = charger_dataset("train")
-        eval_dataset = charger_dataset("validation")
+        train_dataset = charger_dataset("train", seed=hp.seed)
+        eval_dataset = charger_dataset("validation", seed=hp.seed)
         nom_run = "complet"
 
     if args_cli.nom_run is not None:

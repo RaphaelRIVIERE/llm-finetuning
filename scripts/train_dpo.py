@@ -11,6 +11,8 @@ from peft import LoraConfig, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 from trl import DPOConfig, DPOTrainer
 
+from app.prompts import construire_prompt
+
 MODELE_BASE = "Qwen/Qwen3-1.7B-Base"
 CHECKPOINT_SFT = "runs/sft/complet/checkpoint-500"
 DOSSIER_DATASET = Path("data/export/dpo")
@@ -48,13 +50,15 @@ class Hyperparametres:
     nom_experience_mlflow: str = "triage-chsa-dpo"
 
 
-def charger_dataset(split, taille_max=None):
-    """Charge un split JSONL du dataset DPO, colonnes prompt/chosen/rejected uniquement."""
+def charger_dataset(split, taille_max=None, seed=42):
+    """Charge un split JSONL du dataset DPO en colonnes prompt/chosen/rejected. Le prompt
+    reçoit la consigne de sa tâche, comme au SFT."""
     dataset = load_dataset("json", data_files=str(DOSSIER_DATASET / f"{split}.jsonl"), split="train")
-    dataset = dataset.select_columns(["prompt", "chosen", "rejected"])
     if taille_max is not None:
-        dataset = dataset.select(range(min(taille_max, len(dataset))))
-    return dataset
+        # tirage au hasard plutôt que les premières lignes, rangées dans l'ordre de la source
+        dataset = dataset.shuffle(seed=seed).select(range(min(taille_max, len(dataset))))
+    dataset = dataset.map(lambda ex: {"prompt": construire_prompt(ex["tache"], ex["prompt"])})
+    return dataset.select_columns(["prompt", "chosen", "rejected"])
 
 
 def charger_modele_sft_fusionne(checkpoint=CHECKPOINT_SFT):
@@ -127,11 +131,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--taille-train", type=int, default=5000,
-        help="Nombre d'exemples train utilisés (le split complet fait 95464 lignes).",
+        help="Nombre de paires train utilisées (le split complet fait environ 63 000 paires).",
     )
     parser.add_argument(
         "--taille-eval", type=int, default=200,
-        help="Nombre d'exemples de validation utilisés pendant l'entraînement (le split complet fait 2228 lignes).",
+        help="Nombre de paires de validation utilisées pendant l'entraînement (le split complet fait environ 7900 paires).",
     )
     parser.add_argument("--epochs", type=float, help="Nombre d'epochs, remplace la valeur de la config.")
     parser.add_argument("--nom-run", help="Nom du run, utilisé pour le dossier de sortie et MLflow.")
@@ -143,12 +147,12 @@ if __name__ == "__main__":
 
     if args_cli.pilote:
         hp.epochs = 1.0
-        train_dataset = charger_dataset("train", taille_max=200)
-        eval_dataset = charger_dataset("validation", taille_max=50)
+        train_dataset = charger_dataset("train", taille_max=200, seed=hp.seed)
+        eval_dataset = charger_dataset("validation", taille_max=50, seed=hp.seed)
         nom_run = "pilote"
     else:
-        train_dataset = charger_dataset("train", taille_max=args_cli.taille_train)
-        eval_dataset = charger_dataset("validation", taille_max=args_cli.taille_eval)
+        train_dataset = charger_dataset("train", taille_max=args_cli.taille_train, seed=hp.seed)
+        eval_dataset = charger_dataset("validation", taille_max=args_cli.taille_eval, seed=hp.seed)
         nom_run = "complet"
 
     if args_cli.nom_run is not None:
