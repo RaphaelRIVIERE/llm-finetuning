@@ -2,7 +2,7 @@
 
 import json
 
-from scripts.evaluation import INVALIDE, niveau_predit, scores_par_langue, scores_triage
+from scripts.evaluation import INVALIDE, niveau_lu, niveau_predit, scores_par_langue, scores_triage
 
 
 def reponse(niveau):
@@ -63,3 +63,14 @@ def test_scores_separes_par_langue():
     assert scores["tous"]["rappel_maximum"] == 1 / 2
     assert scores["fr"]["rappel_maximum"] == 1
     assert scores["en"]["rappel_maximum"] == 0
+
+
+def test_niveau_lu_malgre_une_specialite_hors_liste():
+    hors_liste = reponse("moderate").replace("general_medicine", "pediatrics")
+    assert niveau_predit(hors_liste) == INVALIDE
+    assert niveau_lu(hors_liste) == "moderate"
+
+
+def test_niveau_lu_reste_invalide_sans_niveau_connu():
+    assert niveau_lu(JSON_CASSE) == INVALIDE
+    assert niveau_lu(reponse("critique")) == INVALIDE

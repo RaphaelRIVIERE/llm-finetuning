@@ -6,7 +6,7 @@ shot, SFT, SFT+DPO). Seule la façon d'obtenir les réponses change.
 
 from sklearn.metrics import confusion_matrix, f1_score
 
-from app.triage import UrgencyLevel, parser_sortie
+from app.triage import UrgencyLevel, extraire_json, parser_sortie
 
 NIVEAUX = [niveau.value for niveau in UrgencyLevel]
 # Prédiction d'une réponse dont on ne peut pas lire le niveau (JSON cassé, schéma faux)
@@ -24,10 +24,19 @@ def niveau_predit(reponse):
     return resultat.sortie.urgency_level.value
 
 
-def scores_triage(attendus, reponses):
+def niveau_lu(reponse):
+    """Niveau d'urgence lu dans la réponse dès qu'il est présent et dans la liste, même si
+    le reste du JSON est faux (spécialité hors liste, clé manquante). Sert à juger le tri
+    seul. Les scores officiels restent ceux de `niveau_predit`."""
+    objet = extraire_json(reponse)
+    niveau = objet.get("urgency_level") if objet else None
+    return niveau if niveau in NIVEAUX else INVALIDE
+
+
+def scores_triage(attendus, reponses, lire_niveau=niveau_predit):
     """Scores d'un modèle sur un jeu de cas. `attendus` : niveaux relus à la main,
     `reponses` : textes bruts produits par le modèle, dans le même ordre."""
-    predits = [niveau_predit(reponse) for reponse in reponses]
+    predits = [lire_niveau(reponse) for reponse in reponses]
     # Une réponse invalide n'est jamais un bon niveau : elle compte comme une erreur
     # pour la classe attendue
     f1 = f1_score(attendus, predits, labels=NIVEAUX, average=None, zero_division=0)
@@ -48,10 +57,12 @@ def scores_triage(attendus, reponses):
     }
 
 
-def scores_par_langue(attendus, reponses, langues):
+def scores_par_langue(attendus, reponses, langues, lire_niveau=niveau_predit):
     """Scores sur tout le jeu, puis séparés par langue."""
-    scores = {"tous": scores_triage(attendus, reponses)}
+    scores = {"tous": scores_triage(attendus, reponses, lire_niveau)}
     for langue in sorted(set(langues)):
         garde = [i for i, l in enumerate(langues) if l == langue]
-        scores[langue] = scores_triage([attendus[i] for i in garde], [reponses[i] for i in garde])
+        scores[langue] = scores_triage(
+            [attendus[i] for i in garde], [reponses[i] for i in garde], lire_niveau
+        )
     return scores

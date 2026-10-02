@@ -30,8 +30,11 @@ TACHES = {
 }
 
 
-def construire_prompt(tache, texte):
+def construire_prompt(tache, texte, exemples=()):
     """Prompt complet d'une tâche (`triage` ou `qa`). La réponse du modèle vient juste
-    après."""
+    après. `exemples` : couples (texte, réponse) placés avant le texte, pour un modèle
+    qui n'a pas été entraîné sur la tâche (baseline few shot)."""
     consigne, nom = TACHES[tache]
-    return f"{consigne}\n\n{nom} : {texte}\n\nRéponse :\n"
+    blocs = [f"{nom} : {texte_exemple}\n\nRéponse :\n{reponse}" for texte_exemple, reponse in exemples]
+    blocs.append(f"{nom} : {texte}\n\nRéponse :\n")
+    return consigne + "\n\n" + "\n\n".join(blocs)
