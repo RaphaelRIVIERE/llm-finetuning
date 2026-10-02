@@ -35,6 +35,8 @@ def test_modele_parfait():
     assert scores["f1_macro"] == 1
     assert scores["rappel_maximum"] == 1
     assert scores["sous_triage"] == 0
+    assert scores["sur_triage"] == 0
+    assert scores["sous_triage_grave"] == 0
 
 
 def test_json_casse_sur_une_urgence_est_une_urgence_ratee():
@@ -44,6 +46,8 @@ def test_json_casse_sur_une_urgence_est_une_urgence_ratee():
     assert scores["json_valide"] == 2 / 3
     assert scores["rappel_maximum"] == 1 / 2
     assert scores["sous_triage"] == 1 / 3
+    # L'urgence au JSON cassé attend comme un deferred : c'est un sous triage grave
+    assert scores["sous_triage_grave"] == 1 / 2
     # Ligne maximum : 1 bien classé, 1 invalide (dernière colonne)
     assert scores["matrice"][0] == [1, 0, 0, 1]
 
@@ -53,7 +57,16 @@ def test_surestimer_n_est_pas_du_sous_triage():
     reponses = [reponse("maximum"), reponse("maximum")]
     scores = scores_triage(attendus, reponses)
     assert scores["sous_triage"] == 0
+    assert scores["sur_triage"] == 1
     assert scores["f1_macro"] == 0
+
+
+def test_maximum_classe_moderate_n_est_pas_grave():
+    attendus = ["maximum", "maximum"]
+    reponses = [reponse("moderate"), reponse("deferred")]
+    scores = scores_triage(attendus, reponses)
+    assert scores["sous_triage"] == 1
+    assert scores["sous_triage_grave"] == 1 / 2
 
 
 def test_scores_separes_par_langue():

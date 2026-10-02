@@ -42,8 +42,12 @@ def scores_triage(attendus, reponses, lire_niveau=niveau_predit):
     f1 = f1_score(attendus, predits, labels=NIVEAUX, average=None, zero_division=0)
     matrice = confusion_matrix(attendus, predits, labels=NIVEAUX + [INVALIDE])
     sous_triage = sum(RANG[p] > RANG[a] for a, p in zip(attendus, predits))
+    # Sur triage : patient classé plus urgent qu'il ne l'est, il encombre les urgences
+    sur_triage = sum(RANG[p] < RANG[a] for a, p in zip(attendus, predits))
     # Rappel sur maximum : parmi les vraies urgences vitales, la part trouvée
     predits_si_maximum = [p for a, p in zip(attendus, predits) if a == "maximum"]
+    # Sous triage grave : urgence vitale classée deferred (ou invalide), le patient attend
+    graves = sum(RANG[p] == RANG["deferred"] for p in predits_si_maximum)
     return {
         "n": len(attendus),
         "json_valide": sum(p != INVALIDE for p in predits) / len(predits),
@@ -51,6 +55,9 @@ def scores_triage(attendus, reponses, lire_niveau=niveau_predit):
         "f1_macro": float(f1.mean()),
         "rappel_maximum": predits_si_maximum.count("maximum") / len(predits_si_maximum) if predits_si_maximum else None,
         "sous_triage": sous_triage / len(attendus),
+        "sur_triage": sur_triage / len(attendus),
+        # Parmi les vraies urgences vitales, la part laissée en attente
+        "sous_triage_grave": graves / len(predits_si_maximum) if predits_si_maximum else None,
         # Lignes : niveau attendu. Colonnes : niveau prédit, plus INVALIDE en dernier.
         # La ligne INVALIDE est retirée, ce n'est jamais un niveau attendu.
         "matrice": matrice[:len(NIVEAUX)].tolist(),
