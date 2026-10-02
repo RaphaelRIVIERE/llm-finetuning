@@ -1,12 +1,13 @@
 """Entraînement SFT (LoRA) de Qwen3-1.7B-Base sur le dataset de triage médical."""
 
 import argparse
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import mlflow
 import torch
-from datasets import load_dataset
+from datasets import Dataset
 from peft import LoraConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 from trl import SFTConfig, SFTTrainer
@@ -47,7 +48,11 @@ class Hyperparametres:
 def charger_dataset(split, taille_max=None, seed=42):
     """Charge un split JSONL du dataset SFT en colonnes prompt/completion. Le prompt est la
     consigne de la tâche suivie du texte, construit par la même fonction que l'API."""
-    dataset = load_dataset("json", data_files=str(DOSSIER_DATASET / f"{split}.jsonl"), split="train")
+    # Lu à la main plutôt qu'avec load_dataset("json") : une colonne vide sur les premières
+    # milliers de lignes (transformations) reçoit un type vide, et le chargement plante à
+    # la première valeur texte. On ne garde que les colonnes utiles à l'entraînement.
+    with open(DOSSIER_DATASET / f"{split}.jsonl", encoding="utf-8") as f:
+        dataset = Dataset.from_list([{c: ex[c] for c in ["tache", "instruction", "reponse"]} for ex in map(json.loads, f)])
     if taille_max is not None:
         # le fichier commence par tous les exemples de triage : on mélange avant de couper
         dataset = dataset.shuffle(seed=seed).select(range(min(taille_max, len(dataset))))

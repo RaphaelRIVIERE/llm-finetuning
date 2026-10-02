@@ -5,7 +5,8 @@ from collections import Counter
 
 from app.triage import StatutParsing, parser_sortie
 from scripts.examples import (
-    apply_translations, build_dpo_examples, build_qa_examples, build_triage_examples, keep_scored_preferences, sample_qa_examples,
+    apply_translations, build_dpo_examples, build_qa_examples, build_triage_examples, keep_scored_preferences,
+    sample_balanced_by_length, sample_qa_examples,
 )
 
 CAS = "Homme de 62 ans, amené aux urgences pour une douleur thoracique depuis une heure."
@@ -178,3 +179,13 @@ def test_triage_and_qa_examples_have_same_fields():
     [triage] = build_triage_examples([annotation()], SPLITS)
     [qa] = build_qa_examples([question()], SPLITS_QA)
     assert set(triage) == set(qa)
+
+
+def test_dpo_sample_balanced_on_length():
+    # comme dans la source : la réponse préférée est souvent la plus longue
+    paires = [{"id": f"longue_{n}", "chosen": "aaaa", "rejected": "a"} for n in range(650)]
+    paires += [{"id": f"courte_{n}", "chosen": "a", "rejected": "aaaa"} for n in range(350)]
+    tirage = sample_balanced_by_length(paires, 200)
+    assert sum(len(p["chosen"]) > len(p["rejected"]) for p in tirage) == 100
+    assert len({p["id"] for p in tirage}) == 200
+    assert sample_balanced_by_length(paires, 200) == tirage

@@ -1,21 +1,23 @@
 """Alignement DPO (LoRA) du modèle SFT sur les paires de préférence UltraMedical-Preference."""
 
 import argparse
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import mlflow
 import torch
-from datasets import load_dataset
+from datasets import Dataset
 from peft import LoraConfig, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 from trl import DPOConfig, DPOTrainer
 
 from app.prompts import construire_prompt
+from scripts.examples import sample_balanced_by_length
 from scripts.suivi import enregistrer_debut_de_run, enregistrer_fin_de_run
 
 MODELE_BASE = "Qwen/Qwen3-1.7B-Base"
-CHECKPOINT_SFT = "runs/sft/complet/checkpoint-500"
+CHECKPOINT_SFT = "runs/sft/triage/checkpoint-600"
 DOSSIER_DATASET = Path("data/export/dpo")
 
 
@@ -54,10 +56,16 @@ class Hyperparametres:
 def charger_dataset(split, taille_max=None, seed=42):
     """Charge un split JSONL du dataset DPO en colonnes prompt/chosen/rejected. Le prompt
     reçoit la consigne de sa tâche, comme au SFT."""
-    dataset = load_dataset("json", data_files=str(DOSSIER_DATASET / f"{split}.jsonl"), split="train")
+    # Lu à la main plutôt qu'avec load_dataset("json") : une colonne vide sur les premières
+    # milliers de lignes (transformations) reçoit un type vide, et le chargement plante à
+    # la première valeur texte. On ne garde que les colonnes utiles à l'entraînement.
+    with open(DOSSIER_DATASET / f"{split}.jsonl", encoding="utf-8") as f:
+        paires = [{c: ex[c] for c in ["tache", "prompt", "chosen", "rejected"]} for ex in map(json.loads, f)]
     if taille_max is not None:
-        # tirage au hasard plutôt que les premières lignes, rangées dans l'ordre de la source
-        dataset = dataset.shuffle(seed=seed).select(range(min(taille_max, len(dataset))))
+        # tirage équilibré sur la longueur : dans la source, la réponse préférée est la
+        # plus longue dans 65 % des paires (notebook 05)
+        paires = sample_balanced_by_length(paires, taille_max, seed)
+    dataset = Dataset.from_list(paires)
     dataset = dataset.map(lambda ex: {"prompt": construire_prompt(ex["tache"], ex["prompt"])})
     return dataset.select_columns(["prompt", "chosen", "rejected"])
 
@@ -126,6 +134,7 @@ def entrainer(hp: Hyperparametres, nom_run: str, train_dataset, eval_dataset):
     with mlflow.start_run(run_name=nom_run):
         enregistrer_debut_de_run(hp, DOSSIER_DATASET, train_dataset, eval_dataset)
         mlflow.log_param("checkpoint_sft", CHECKPOINT_SFT)
+        mlflow.log_param("tirage_paires", "equilibre_longueur")
         resultat = trainer.train()
         trainer.save_model(str(dossier_modele))
         enregistrer_fin_de_run(trainer, resultat, dossier_modele)
@@ -139,7 +148,7 @@ if __name__ == "__main__":
         help="Run pilote sur un petit sous ensemble, pour valider que la pipeline tourne.",
     )
     parser.add_argument(
-        "--taille-train", type=int, default=5000,
+        "--taille-train", type=int, default=2000,
         help="Nombre de paires train utilisées (le split complet fait environ 63 000 paires).",
     )
     parser.add_argument(

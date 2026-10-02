@@ -89,6 +89,20 @@ def keep_scored_preferences(records):
     return [record for record in records if record["score_chosen"] > record["score_rejected"]]
 
 
+def sample_balanced_by_length(paires, n, seed=42):
+    """Tire `n` paires DPO, moitié où la réponse préférée est la plus longue, moitié où
+    elle est la plus courte (ou de même longueur). Le DPO ne peut plus apprendre que plus
+    long veut dire meilleur."""
+    rng = random.Random(seed)
+    plus_longues = [p for p in paires if len(p["chosen"]) > len(p["rejected"])]
+    autres = [p for p in paires if len(p["chosen"]) <= len(p["rejected"])]
+    moitie = n // 2
+    tirage = rng.sample(plus_longues, min(moitie, len(plus_longues)))
+    tirage += rng.sample(autres, min(n - moitie, len(autres)))
+    rng.shuffle(tirage)
+    return tirage
+
+
 def build_dpo_examples(records, splits):
     """Paires DPO : le prompt, la réponse préférée et la réponse écartée. Le split vient du
     découpage par cas. Les prompts sont des questions médicales, ils prennent la consigne
