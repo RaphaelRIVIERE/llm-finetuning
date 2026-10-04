@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sft", default="runs/sft/triage/checkpoint-600", help="adaptateur SFT")
     # checkpoint_final est le meilleur checkpoint du run, rechargé en fin d'entraînement
-    parser.add_argument("--dpo", default="runs/dpo/triage/checkpoint_final", help="adaptateur DPO")
+    parser.add_argument("--dpo", default="runs/dpo/triage_5000/checkpoint_final", help="adaptateur DPO")
     parser.add_argument("--sortie", default="runs/final", type=Path, help="dossier du modèle fusionné")
     args = parser.parse_args()
     fusionner(args.sft, args.dpo, args.sortie)
