@@ -68,7 +68,9 @@ async def main(url, nb_cas, concurrences, seed):
     cle = os.environ["API_KEY"]
     tous_les_cas = lire_cas(nb_cas, seed)
 
-    async with httpx.AsyncClient(timeout=DELAI_MAX) as client:
+    # Modal répond 303 à une requête qui dépasse 150 s (démarrage à froid) et donne une
+    # adresse où attendre la réponse : il faut suivre la redirection.
+    async with httpx.AsyncClient(timeout=DELAI_MAX, follow_redirects=True) as client:
         premier = await appeler(client, url, cle, tous_les_cas[0])
         print(f"premier appel (à froid si l'API dormait) : {premier['latence_ms'] / 1000:.1f} s, statut {premier['statut']}")
 
