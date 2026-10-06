@@ -19,10 +19,12 @@ from tests.constantes import CLE_API, REPONSE_FACTICE
 
 
 class FauxMoteur:
-    """Remplace AsyncLLMEngine : renvoie toujours la même réponse et garde les appels."""
+    """Remplace AsyncLLMEngine : renvoie toujours le même texte et garde les appels."""
 
     def __init__(self):
         self.appels = []
+        # Changé par un test pour simuler une sortie invalide.
+        self.texte = REPONSE_FACTICE
         # Passé à True par un test pour simuler un moteur qui ne produit aucune sortie.
         self.vide = False
 
@@ -34,7 +36,7 @@ class FauxMoteur:
         self.appels.append(SimpleNamespace(prompt=prompt, params=params))
         if self.vide:
             return
-        yield SimpleNamespace(outputs=[SimpleNamespace(text=REPONSE_FACTICE)])
+        yield SimpleNamespace(outputs=[SimpleNamespace(text=self.texte)])
 
 
 # Tout ça doit être en place avant d'importer app.main : app.database crée le moteur

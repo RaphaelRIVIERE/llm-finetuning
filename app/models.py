@@ -14,6 +14,10 @@ class Interaction(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     instruction: Mapped[str] = mapped_column(Text)
     response: Mapped[str] = mapped_column(Text)
+    # Résultat du parsing (valide, json_invalide...). urgency_level est vide si invalide.
+    parsing_status: Mapped[str] = mapped_column(Text)
+    urgency_level: Mapped[str | None] = mapped_column(Text)
+    model_version: Mapped[str] = mapped_column(Text)
     generation_time_ms: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

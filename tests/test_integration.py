@@ -20,7 +20,7 @@ API_KEY = dotenv_values(Path(__file__).parent.parent / ".env").get("API_KEY")
 pytestmark = pytest.mark.skipif(API_URL is None, reason="API_URL non défini, pas d'API réelle à appeler")
 
 
-def test_douleur_thoracique_oriente_vers_le_coeur():
+def test_douleur_thoracique_est_une_urgence_vitale():
     # Urgence vitale typique, où un faux négatif serait le pire scénario pour un agent de triage.
     instruction = (
         "J'ai 58 ans, je fume, et j'ai une douleur dans la poitrine qui serre et qui "
@@ -33,5 +33,6 @@ def test_douleur_thoracique_oriente_vers_le_coeur():
     )
 
     assert reponse.status_code == 200
-    texte = reponse.json()["response"].lower()
-    assert any(mot in texte for mot in ["myocard", "coronarien", "cardiaque", "infarctus"])
+    corps = reponse.json()
+    assert corps["urgency_level"] == "maximum"
+    assert corps["specialty"] == "cardiology"

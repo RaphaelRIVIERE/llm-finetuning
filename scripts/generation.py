@@ -19,7 +19,7 @@ from pathlib import Path
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 
-from app.config import GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN
+from app.config import GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, PARAMETRES_DECODAGE
 from app.prompts import construire_prompt
 from app.triage import UrgencyLevel
 
@@ -29,11 +29,9 @@ DOSSIER_SORTIE = Path("data/generations")
 # Les exemples few shot sont choisis parmi les cas courts, pour garder un prompt court
 LONGUEUR_MAX_EXEMPLE = 600
 
-# Décodage glouton, sans pénalité : une pénalité de fréquence abîmerait le JSON, qui
-# répète forcément guillemets et deux points. Le JSON d'entraînement tient sur une seule
-# ligne : on arrête au premier retour à la ligne, sinon le modèle de base continue avec
-# un nouveau « Cas : » inventé.
-DECODAGE = SamplingParams(temperature=0.0, max_tokens=512, stop=["\n"])
+# Le même décodage que l'API (voir app/config.py). L'arrêt au retour à la ligne compte
+# aussi pour le modèle de base, qui sinon continue avec un nouveau « Cas : » inventé.
+DECODAGE = SamplingParams(**PARAMETRES_DECODAGE)
 
 
 def lire_triage(split):

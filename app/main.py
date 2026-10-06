@@ -12,11 +12,13 @@ from vllm.utils import random_uuid
 
 from app.config import (
     API_KEY, CHEMIN_MODELE, DTYPE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN,
-    PARAMETRES_DECODAGE,
+    PARAMETRES_DECODAGE, REVISION_MODELE, VERSION_MODELE,
 )
 from app.database import Base, SessionLocale, moteur
 from app.models import Interaction, Log
+from app.prompts import construire_prompt
 from app.schemas import ReponseTriage, RequeteTriage
+from app.triage import StatutParsing, parser_sortie
 
 moteurs = {}
 
@@ -26,7 +28,7 @@ async def lifespan(app: FastAPI):
     if not API_KEY:
         raise RuntimeError("API_KEY n'est pas défini, l'API refuse de démarrer sans clé")
     args = AsyncEngineArgs(
-        model=CHEMIN_MODELE, dtype=DTYPE,
+        model=CHEMIN_MODELE, revision=REVISION_MODELE, dtype=DTYPE,
         gpu_memory_utilization=GPU_MEMORY_UTILIZATION, max_model_len=MAX_MODEL_LEN,
     )
     moteurs["llm"] = AsyncLLMEngine.from_engine_args(args)
@@ -85,20 +87,31 @@ async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
 
     debut_generation = time.perf_counter()
     sortie_finale = None
-    async for sortie in moteurs["llm"].generate(requete.instruction, params, id_requete):
+    prompt = construire_prompt("triage", requete.instruction)
+    async for sortie in moteurs["llm"].generate(prompt, params, id_requete):
         sortie_finale = sortie
     duree_generation_ms = (time.perf_counter() - debut_generation) * 1000
     if sortie_finale is None:
         raise HTTPException(status_code=500, detail="The model returned no output")
     reponse = sortie_finale.outputs[0].text
+    resultat = parser_sortie(reponse)
 
+    # Enregistrée même si la sortie est invalide : c'est aussi ce qu'on veut pouvoir auditer.
     async with SessionLocale() as session:
         interaction = Interaction(
             instruction=requete.instruction, response=reponse,
+            parsing_status=resultat.statut.value,
+            urgency_level=resultat.sortie.urgency_level.value if resultat.sortie else None,
+            model_version=VERSION_MODELE,
             generation_time_ms=duree_generation_ms,
         )
         session.add(interaction)
         await session.commit()
         request.state.interaction_id = interaction.id
 
-    return ReponseTriage(response=reponse)
+    if resultat.statut != StatutParsing.VALIDE:
+        raise HTTPException(
+            status_code=502,
+            detail="The model did not return a valid triage, manual triage required",
+        )
+    return ReponseTriage(**resultat.sortie.model_dump(), interaction_id=interaction.id)
