@@ -36,7 +36,11 @@ class FauxMoteur:
         self.appels.append(SimpleNamespace(prompt=prompt, params=params))
         if self.vide:
             return
-        yield SimpleNamespace(outputs=[SimpleNamespace(text=self.texte)])
+        # Un faux token par mot, pour que les comptes soient vérifiables.
+        yield SimpleNamespace(
+            prompt_token_ids=prompt.split(),
+            outputs=[SimpleNamespace(text=self.texte, token_ids=self.texte.split())],
+        )
 
 
 # Tout ça doit être en place avant d'importer app.main : app.database crée le moteur

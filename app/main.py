@@ -94,6 +94,8 @@ async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
     if sortie_finale is None:
         raise HTTPException(status_code=500, detail="The model returned no output")
     reponse = sortie_finale.outputs[0].text
+    nb_tokens_prompt = len(sortie_finale.prompt_token_ids)
+    nb_tokens_reponse = len(sortie_finale.outputs[0].token_ids)
     resultat = parser_sortie(reponse)
 
     # Enregistrée même si la sortie est invalide : c'est aussi ce qu'on veut pouvoir auditer.
@@ -103,6 +105,7 @@ async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
             parsing_status=resultat.statut.value,
             urgency_level=resultat.sortie.urgency_level.value if resultat.sortie else None,
             model_version=VERSION_MODELE,
+            prompt_tokens=nb_tokens_prompt, completion_tokens=nb_tokens_reponse,
             generation_time_ms=duree_generation_ms,
         )
         session.add(interaction)

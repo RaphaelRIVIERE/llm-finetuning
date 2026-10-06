@@ -81,6 +81,8 @@ def test_triage_enregistre_l_interaction_et_le_log(client, lire_table):
     assert interaction.parsing_status == "valide"
     assert interaction.urgency_level == "maximum"
     assert interaction.model_version == VERSION_MODELE
+    assert interaction.prompt_tokens == len(construire_prompt("triage", INSTRUCTION).split())
+    assert interaction.completion_tokens == len(REPONSE_FACTICE.split())
     assert interaction.generation_time_ms > 0
 
     nouveaux_logs = lire_table(Log)[nb_logs:]

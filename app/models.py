@@ -18,6 +18,9 @@ class Interaction(Base):
     parsing_status: Mapped[str] = mapped_column(Text)
     urgency_level: Mapped[str | None] = mapped_column(Text)
     model_version: Mapped[str] = mapped_column(Text)
+    # Taille de la requête et de la réponse : sert aux mesures de débit et au suivi du coût.
+    prompt_tokens: Mapped[int] = mapped_column(Integer)
+    completion_tokens: Mapped[int] = mapped_column(Integer)
     generation_time_ms: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
