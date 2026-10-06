@@ -1,4 +1,4 @@
-"""Déploie l'API de triage sur Modal, avec un GPU L4 (ou A10G si aucun L4 n'est libre).
+"""Déploie l'API de triage sur Modal, avec un GPU A10G (ou L4 si aucun A10G n'est libre).
 
 L'image est construite à partir du Dockerfile : c'est la même que celle testée en local
 et dans le pipeline. Le modèle n'est pas dans l'image, vLLM le télécharge depuis Hugging
@@ -31,9 +31,10 @@ DOSSIER_CACHE = "/cache"
 
 @app.function(
     image=image,
-    # L4 en premier choix. Les L4 manquent parfois (12 minutes d'attente mesurées le
-    # 2026-10-06) : Modal prend alors un A10G, 24 Go aussi et compatible bfloat16.
-    gpu=["L4", "A10G"],
+    # A10G en premier choix : génération 1,7 fois plus rapide que sur L4 (mesuré le
+    # 2026-10-06), pour un coût par requête proche en charge. L4 en secours si aucun
+    # A10G n'est libre (12 minutes d'attente d'une L4 mesurées le même jour).
+    gpu=["A10G", "L4"],
     secrets=[modal.Secret.from_name("triage-chsa")],
     env={
         "CHEMIN_MODELE": MODELE,
