@@ -1,6 +1,6 @@
 """Mesure la latence et le débit de l'API de triage déployée, vus du client.
 
-    uv run python -m scripts.benchmark_api --url https://raphaelriviere06--triage-chsa-api.modal.run
+    uv run python -m scripts.benchmark_api --url <URL_API>
 """
 
 import argparse
