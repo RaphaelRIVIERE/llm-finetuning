@@ -1,0 +1,27 @@
+flowchart LR
+    subgraph D["Données"]
+        S["4 sources publiques<br/>MediQAl, FrenchMedMCQA,<br/>MedQuAD, UltraMedical"]
+        A["Anonymisation<br/>et filtrage"]
+        M["Annotation du triage<br/>Mistral Large + protocole"]
+        C["Découpage par cas<br/>train, validation, test"]
+        S --> A --> M --> C
+    end
+    subgraph E["Entraînement (RTX 5060)"]
+        SFT["SFT + LoRA<br/>5050 exemples"]
+        DPO["DPO + LoRA<br/>5000 paires"]
+        F["Fusion des adaptateurs"]
+        SFT --> DPO --> F
+    end
+    subgraph P["Publication"]
+        HD["Dataset<br/>Hugging Face"]
+        HM["Modèle<br/>Hugging Face"]
+    end
+    subgraph S2["Service"]
+        CI["GitHub Actions<br/>tests, build, deploy"]
+        API["API sur Modal<br/>FastAPI + vLLM"]
+        CI --> API
+    end
+    C --> SFT
+    C --> HD
+    F --> HM
+    HM --> API

@@ -1,0 +1,14 @@
+flowchart TD
+    U["Soignant ou application<br/>POST /triage + clé API"] --> MO["Modal<br/>réveille un GPU si l'API dort"]
+    MO --> K{"Clé API valide ?"}
+    K -- non --> E401["401"]
+    K -- oui --> V{"Texte valide ?<br/>non vide, 4000 caractères au plus"}
+    V -- non --> E422["422"]
+    V -- oui --> P["Ajout de la consigne de triage"]
+    P --> L["vLLM génère la réponse<br/>glouton, arrêt en fin de ligne"]
+    L --> J{"JSON valide ?"}
+    J --> DB[("Postgres (Neon)<br/>interaction et log")]
+    J -- oui --> R200["200 + triage en JSON<br/>+ interaction_id"]
+    J -- non --> E502["502<br/>triage manuel requis"]
+    E401 -.-> DB
+    E422 -.-> DB
