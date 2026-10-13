@@ -9,7 +9,6 @@ on:
 permissions:
   contents: read
 
-# Un nouveau push sur la même branche annule le run encore en cours.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -26,12 +25,10 @@ jobs:
           version: "0.12.7"
           enable-cache: true
 
-      # Seulement le groupe test : vLLM est remplacé par un faux moteur et Postgres par
-      # SQLite (voir tests/conftest.py), pas besoin de GPU ni de torch.
+      # vLLM est simulé et Postgres remplacé par SQLite (voir tests/conftest.py), pas besoin de GPU.
       - name: Installer les dépendances
         run: uv sync --frozen --no-default-groups --group test
 
-      # tests/test_integration.py est ignoré tout seul, API_URL n'étant pas défini.
       - name: Lancer les tests
         run: uv run --no-sync pytest -v
 
@@ -40,8 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      # vLLM et torch avec CUDA pèsent plusieurs Go, plus que ce que le runner laisse
-      # de libre par défaut. On supprime des outils préinstallés dont on ne se sert pas.
+      # L'image avec vLLM et torch pèse plusieurs Go, on libère de la place sur le runner.
       - name: Libérer de l'espace disque
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -51,9 +47,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      # Construit l'image sans la publier : Modal construit la sienne à partir du même
-      # Dockerfile. Ce build vérifie que le Dockerfile marche avant de déployer. load
-      # rend l'image disponible pour l'étape suivante.
       - name: Construire l'image
         uses: docker/build-push-action@v7
         with:
@@ -62,14 +55,12 @@ jobs:
           load: true
           tags: triage-chsa:${{ github.sha }}
 
-      # Sans GPU, on ne peut pas démarrer vLLM. On vérifie au moins que l'app et vLLM
-      # s'importent dans l'image : le moteur n'est créé qu'au démarrage de l'API.
+      # Sans GPU on ne peut pas lancer vLLM, on vérifie juste que l'app s'importe.
       - name: Vérifier que l'application s'importe
         run: docker run --rm --entrypoint python triage-chsa:${{ github.sha }} -c "import app.main"
 
-  # Déploie sur Modal seulement après les tests et le build, et seulement depuis main.
-  # Modal reconstruit l'image de son côté à partir du même Dockerfile. Un changement de
-  # REVISION_MODELE dans modal_app.py suffit à déployer un nouveau modèle.
+  # Modal reconstruit l'image à partir du même Dockerfile. Changer REVISION_MODELE dans
+  # modal_app.py suffit pour déployer un nouveau modèle.
   deploy:
     needs: [tests, build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -78,8 +69,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # pipx est déjà installé sur les runners GitHub : pas besoin d'installer uv pour
-      # lancer le client Modal.
       - name: Déployer sur Modal
         run: pipx run modal deploy modal_app.py
         env:
