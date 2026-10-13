@@ -17,7 +17,7 @@ from app.config import (
 from app.database import Base, SessionLocale, moteur
 from app.models import Interaction, Log
 from app.prompts import construire_prompt
-from app.schemas import ReponseTriage, RequeteTriage
+from app.schemas import ReponseSante, ReponseTriage, RequeteTriage
 from app.triage import StatutParsing, parser_sortie
 
 moteurs = {}
@@ -38,7 +38,17 @@ async def lifespan(app: FastAPI):
     moteurs.clear()
 
 
-app = FastAPI(title="Agent de triage CHSA", lifespan=lifespan)
+DESCRIPTION = """
+Agent de triage médical du CHSA (preuve de concept).
+
+À partir de la description d'un cas clinique, le modèle renvoie un niveau d'urgence,
+une spécialité, les symptômes clés, les signaux d'alerte, une justification et une
+recommandation. Le résultat aide le personnel soignant, il ne remplace pas son jugement.
+
+La route `/triage` demande une clé API dans l'en-tête `X-API-Key`.
+"""
+
+app = FastAPI(title="Agent de triage CHSA", description=DESCRIPTION, lifespan=lifespan)
 
 entete_cle = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -75,12 +85,21 @@ async def journaliser_requetes(request: Request, call_next):
     return reponse
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
+@app.get("/health", response_model=ReponseSante, summary="Vérifier que le service répond")
+async def health() -> ReponseSante:
+    return ReponseSante(status="ok")
 
 
-@app.post("/triage", response_model=ReponseTriage, dependencies=[Depends(verifier_cle)])
+@app.post(
+    "/triage",
+    response_model=ReponseTriage,
+    dependencies=[Depends(verifier_cle)],
+    summary="Trier un cas clinique",
+    responses={
+        401: {"description": "Clé API absente ou invalide"},
+        502: {"description": "Le modèle n'a pas rendu un triage valide, triage manuel requis"},
+    },
+)
 async def triage(requete: RequeteTriage, request: Request) -> ReponseTriage:
     params = SamplingParams(**PARAMETRES_DECODAGE)
     id_requete = random_uuid()

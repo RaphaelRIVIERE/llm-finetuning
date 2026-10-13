@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 
 from app.config import LONGUEUR_MAX_CAS
 from app.triage import SortieTriage
@@ -11,7 +11,18 @@ from app.triage import SortieTriage
 class RequeteTriage(BaseModel):
     # Les espaces autour sont retirés avant de vérifier la longueur : un texte fait
     # seulement d'espaces est refusé comme un texte vide.
-    instruction: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=LONGUEUR_MAX_CAS)]
+    instruction: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=LONGUEUR_MAX_CAS),
+        Field(
+            description="Description du cas clinique en texte libre",
+            examples=["Homme de 62 ans, douleur thoracique depuis 30 minutes, irradiant au bras gauche, avec sueurs."],
+        ),
+    ]
+
+
+class ReponseSante(BaseModel):
+    status: str = Field(description="Vaut « ok » quand le service répond", examples=["ok"])
 
 
 class ReponseTriage(SortieTriage):
